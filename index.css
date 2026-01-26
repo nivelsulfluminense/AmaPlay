@@ -1,0 +1,21 @@
+/* Global Styles */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  background-color: #102216; /* background-dark */
+}
+
+/* Custom Scrollbar for non-webkit */
+* {
+  scrollbar-width: none;
+}
+
+/* Chrome/Safari scrollbar hide */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

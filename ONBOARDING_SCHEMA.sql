@@ -1,0 +1,4 @@
+-- Suggested Schema Update
+-- Adding 'intended_role' to store the Role user Selected (Presidente/Vice/Player) before they are approved
+-- Adding 'is_setup_complete' to track the finalization of the onboarding flow
+-- Using 'team_id' to skip Team Selection if already set

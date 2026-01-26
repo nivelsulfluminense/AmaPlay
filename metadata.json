@@ -1,0 +1,5 @@
+{
+  "name": "AmaPlay",
+  "description": "A comprehensive sports team management application allowing users to manage rosters, finances, inventory, and schedules with a dark-themed, modern UI.",
+  "requestFramePermissions": []
+}

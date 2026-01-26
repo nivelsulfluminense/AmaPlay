@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AmaPlay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&family=Noto+Sans:wght@100..900&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Preload main background image for better LCP on Login Screen -->
+    <link rel="preload" as="image" href="https://lh3.googleusercontent.com/aida-public/AB6AXuCwVBdYdRgxZGweShWI5oX_h4nRIi_9npm71jy4WJRpTdjnSwomR2A281nN3Kb-lvpcKdwNvRgC3PAC4QbLl7m7Lfh6G6EJ7cwQ3g1cju9PIhpBPICvytw1GDXaQ3P8WGcMzggFZl_pmddAkjjYplVxCAswVfb_vue-AxfliEaI_4LTsOiILwCFrFu6jCXBMOSxCU6jbAUIliRpERHXb8f5-RIzgQqsSHFqiEkxTqtK7tb8eo622IDutw-1o7gqJ4Gc8E3e-lo8eDk" />
+    
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#13ec5b",
+              "primary-dark": "#0ea641",
+              "primary-content": "#003b12",
+              "background-light": "#f6f8f6",
+              "background-dark": "#102216",
+              "surface-dark": "#1a3023",
+              "card-dark": "#162b1d",
+              danger: "#fa5538",
+              "input-bg": "#193322",
+              "input-border": "#326744",
+              "text-muted": "#92c9a4",
+            },
+            fontFamily: {
+              display: ["Lexend", "sans-serif"],
+              body: ["Noto Sans", "sans-serif"],
+            },
+            backgroundImage: {
+              "field-pattern":
+                "url('https://lh3.googleusercontent.com/aida-public/AB6AXuCwVBdYdRgxZGweShWI5oX_h4nRIi_9npm71jy4WJRpTdjnSwomR2A281nN3Kb-lvpcKdwNvRgC3PAC4QbLl7m7Lfh6G6EJ7cwQ3g1cju9PIhpBPICvytw1GDXaQ3P8WGcMzggFZl_pmddAkjjYplVxCAswVfb_vue-AxfliEaI_4LTsOiILwCFrFu6jCXBMOSxCU6jbAUIliRpERHXb8f5-RIzgQqsSHFqiEkxTqtK7tb8eo622IDutw-1o7gqJ4Gc8E3e-lo8eDk')",
+              "mesh-pattern":
+                "radial-gradient(circle at 50% 50%, rgba(19, 236, 91, 0.05) 0%, transparent 50%), repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(19, 236, 91, 0.03) 20px, rgba(19, 236, 91, 0.03) 21px), repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(19, 236, 91, 0.03) 20px, rgba(19, 236, 91, 0.03) 21px)",
+            },
+            boxShadow: {
+              glow: "0 0 20px rgba(19, 236, 91, 0.15)",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        min-height: 100vh;
+        background-color: #102216;
+      }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      .material-symbols-outlined {
+        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+      }
+      .material-symbols-outlined.filled {
+        font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
+    "@imgly/background-removal": "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm",
+    "face-api.js": "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.esm.js",
+    "html-to-image": "https://esm.sh/html-to-image@1.11.11"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
