@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
+import { useAuthRedirect } from '../hooks/useAuthRedirect';
 
 const LoginScreen = () => {
   const navigate = useNavigate();
@@ -14,6 +15,10 @@ const LoginScreen = () => {
     isInitialized,
     userId
   } = useUser();
+
+  // 🔑 Enable smart routing after login
+  useAuthRedirect();
+
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

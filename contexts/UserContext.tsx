@@ -58,6 +58,7 @@ interface UserContextType {
   updateMemberRole: (targetUserId: string, targetCurrentRole: Role, newRole: Role) => Promise<boolean>;
   approveMember: (memberId: string) => Promise<boolean>;
   rejectMember: (memberId: string) => Promise<boolean>;
+  removeMember: (memberId: string) => Promise<boolean>;
 
   // Status
   isLoading: boolean;
@@ -89,7 +90,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     logo: null
   });
   const [isSetupComplete, setIsSetupComplete] = useState(false);
-  const [status, setStatusState] = useState<'pending' | 'approved' | 'rejected'>('approved');
+  const [status, setStatusState] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [isFirstManager, setIsFirstManager] = useState(false);
   const [stats, setStatsState] = useState({
     pace: 50, shooting: 50, passing: 50, dribbling: 50, defending: 50, physical: 50
@@ -105,7 +106,6 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Helper logic to apply profile data to various states efficiently
   const applyUserData = (userData: any) => {
-    console.log('UserContext applyUserData:', userData);
     if (!userData) return;
 
     setUserId(userData.id || userData.userId || null);
@@ -116,7 +116,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     setCardAvatarState(userData.card_avatar || null);
     setTeamIdState(userData.team_id || null);
     setIsSetupComplete(!!userData.is_setup_complete);
-    setStatusState(userData.status || 'approved');
+    setStatusState(userData.status || 'pending');
     setIsFirstManager(!!userData.is_first_manager);
 
     if (userData.intended_role) setIntendedRoleState(userData.intended_role as Role);
@@ -125,13 +125,18 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     if (userData.heart_team) setHeartTeamState(userData.heart_team);
     if (userData.position) setPositionState(userData.position);
 
-    if (userData.teamDetails) {
-      setTeamDetailsState({
-        name: userData.teamDetails.name,
-        primaryColor: userData.teamDetails.primary_color,
-        secondaryColor: userData.teamDetails.secondary_color,
-        logo: userData.teamDetails.logo
-      });
+    const rawTeamDetails = userData.teamDetails;
+    if (rawTeamDetails) {
+      // Handle both object and array from Supabase join
+      const details = Array.isArray(rawTeamDetails) ? rawTeamDetails[0] : rawTeamDetails;
+      if (details) {
+        setTeamDetailsState({
+          name: details.name || '',
+          primaryColor: details.primary_color || '#13ec5b',
+          secondaryColor: details.secondary_color || '#ffffff',
+          logo: details.logo || null
+        });
+      }
     }
   };
 
@@ -231,7 +236,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       logo: null
     });
     setIsSetupComplete(false);
-    setStatusState('approved');
+    setStatusState('pending');
     setIsFirstManager(false);
     setHeartTeamState(null);
     setPositionState(null);
@@ -327,21 +332,18 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
     if (userId) {
       try {
-        const isManager = role === 'presidente' || role === 'vice-presidente';
-        // Logic: Managers approved by default IF they are the first ones, 
-        // Players/secondary managers wait.
-        const finalStatus = (isManager || status === 'approved') ? 'approved' : 'pending';
-
+        // 🔑 FLOWCHART: Setup completo = fim do cadastro (Dados do Atleta)
+        // Status JÁ foi definido no createTeam/joinTeam
+        // Aqui só marcamos que o onboarding acabou
         const { error: profileError } = await supabase
           .from('profiles')
           .update({
-            is_setup_complete: true,
-            status: finalStatus
+            is_setup_complete: true
+            // ❌ NÃO alteramos status aqui! Já foi definido antes
           })
           .eq('id', userId);
 
         if (profileError) throw profileError;
-        setStatusState(finalStatus);
       } catch (err) {
         console.error('Error marking setup complete:', err);
       }
@@ -474,7 +476,8 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       await setTeamId(data.id);
       setTeamDetailsState(details);
 
-      // Criar time garante aprovação automática e promoção ao primeiro gestor
+      // 🔑 FLOWCHART: Criar time = Auto-Aprova Pres/Vice
+      // MAS ainda não marca setup_complete (falta Privacidade + Perfil)
       setStatusState('approved');
       setIsFirstManager(true);
       setRoleState(effectiveRole);
@@ -483,11 +486,20 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         status: 'approved',
         is_first_manager: true,
         role: effectiveRole,
-        team_id: data.id
+        team_id: data.id,
+        is_setup_complete: false // ❌ NÃO completar setup ainda
       });
 
       // Mark that team now has a first manager
       await supabase.from('teams').update({ has_first_manager: true }).eq('id', data.id);
+
+      // 🔑 Popula tabela team_members
+      await supabase.from('team_members').insert({
+        team_id: data.id,
+        profile_id: userId,
+        role: effectiveRole,
+        status: 'approved'
+      });
 
 
       return data.id;
@@ -518,6 +530,9 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       const isManagerCandidate = (effectiveRole === 'presidente' || effectiveRole === 'vice-presidente');
       const shouldBecomeFirstManager = isManagerCandidate && !teamCheck?.has_first_manager;
 
+      // 🔑 FLOWCHART: Buscar Time
+      // - Se virou 1º gestor: aprovado
+      // - Se Admin/Jogador: status = pending
       const newStatus = shouldBecomeFirstManager ? 'approved' : 'pending';
       const newIsFirstManager = shouldBecomeFirstManager;
       const newRole = shouldBecomeFirstManager ? effectiveRole : 'player';
@@ -527,12 +542,21 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         status: newStatus,
         is_first_manager: newIsFirstManager,
         role: newRole,
-        intended_role: effectiveRole
+        intended_role: effectiveRole,
+        is_setup_complete: false // ❌ NÃO completar setup ainda (falta Privacidade + Perfil)
       });
 
       if (shouldBecomeFirstManager) {
         await supabase.from('teams').update({ has_first_manager: true }).eq('id', id);
       }
+
+      // 🔑 Popula tabela team_members 
+      await supabase.from('team_members').upsert({
+        team_id: id,
+        profile_id: userId,
+        role: newRole,
+        status: newStatus
+      }, { onConflict: 'team_id,profile_id' });
 
 
       // Fetch team details to update state
@@ -600,12 +624,21 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
 
-      const { error: updateError } = await supabase
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({ role: newRole })
         .eq('id', targetUserId);
 
-      if (updateError) throw updateError;
+      if (profileError) throw profileError;
+
+      // 🔑 Sync with team_members
+      if (teamId) {
+        await supabase
+          .from('team_members')
+          .update({ role: newRole })
+          .eq('team_id', teamId)
+          .eq('profile_id', targetUserId);
+      }
 
       if (targetUserId === userId) {
         setRoleState(newRole);
@@ -630,11 +663,12 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       // Get member's intended role
       const { data: memberData } = await supabase
         .from('profiles')
-        .select('intended_role, role')
+        .select('intended_role, role, team_id')
         .eq('id', memberId)
         .single();
 
       const finalRole = memberData?.intended_role || memberData?.role || 'player';
+      const mTeamId = memberData?.team_id;
 
       // Enforce "Only One" rule during approval if they intended to be Pres/VP
       if (finalRole === 'presidente' || finalRole === 'vice-presidente') {
@@ -647,14 +681,13 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
           .limit(1);
 
         if (existing && existing.length > 0) {
-          // If role is taken, we can't approve them as that role.
           setError(`Não é possível aprovar como ${finalRole}, pois já existe um ocupando este cargo. Mude a função dele primeiro.`);
           return false;
         }
       }
 
-      // 1. Update status to approved and set their role to what they intended
-      const { error: updateError } = await supabase
+      // 1. Update status to approved and set their role to what they intended in Profiles
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           status: 'approved',
@@ -662,9 +695,21 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         })
         .eq('id', memberId);
 
-      if (updateError) throw updateError;
+      if (profileError) throw profileError;
 
-      // 2. Increment team member count
+      // 2. Update team_members record
+      if (mTeamId) {
+        await supabase
+          .from('team_members')
+          .upsert({
+            team_id: mTeamId,
+            profile_id: memberId,
+            role: finalRole,
+            status: 'approved'
+          }, { onConflict: 'team_id,profile_id' });
+      }
+
+      // 3. Increment team member count
       if (teamId) {
         const { data: team } = await supabase
           .from('teams')
@@ -688,6 +733,53 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const removeMember = async (memberId: string): Promise<boolean> => {
+    if (!userId) return false;
+
+    // Permission check
+    if (role !== 'presidente' && role !== 'vice-presidente') {
+      setError('Apenas Presidentes ou Vice-Presidentes podem remover membros.');
+      return false;
+    }
+
+    try {
+      // 1. Get member team info
+      const { data: memberData } = await supabase
+        .from('profiles')
+        .select('team_id')
+        .eq('id', memberId)
+        .single();
+
+      const mTeamId = memberData?.team_id;
+
+      // 2. Update profile: clear team_id and set status back to pending
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          team_id: null,
+          status: 'pending'
+        })
+        .eq('id', memberId);
+
+      if (profileError) throw profileError;
+
+      // 3. Remove from team_members
+      if (mTeamId) {
+        await supabase
+          .from('team_members')
+          .delete()
+          .eq('team_id', mTeamId)
+          .eq('profile_id', memberId);
+      }
+
+      return true;
+    } catch (err: any) {
+      console.error('Error removing member:', err);
+      setError(err.message || 'Erro ao remover membro');
+      return false;
+    }
+  };
+
   const rejectMember = async (memberId: string): Promise<boolean> => {
     if (!userId) return false;
 
@@ -698,8 +790,17 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     try {
-      // Logic for rejection: clear team_id and set status back to approved (so they can join another team)
-      const { error: updateError } = await supabase
+      // 1. Get member team info
+      const { data: memberData } = await supabase
+        .from('profiles')
+        .select('team_id')
+        .eq('id', memberId)
+        .single();
+
+      const mTeamId = memberData?.team_id;
+
+      // 2. Update profile: clear team_id and set status to rejected
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           team_id: null,
@@ -707,7 +808,16 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         })
         .eq('id', memberId);
 
-      if (updateError) throw updateError;
+      if (profileError) throw profileError;
+
+      // 3. Remove from team_members
+      if (mTeamId) {
+        await supabase
+          .from('team_members')
+          .delete()
+          .eq('team_id', mTeamId)
+          .eq('profile_id', memberId);
+      }
 
       return true;
     } catch (err: any) {
@@ -769,6 +879,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     updateMemberRole,
     approveMember,
     rejectMember,
+    removeMember,
     intendedRole,
     setIntendedRole,
     heartTeam,

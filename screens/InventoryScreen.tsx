@@ -138,8 +138,12 @@ const InventoryScreen = () => {
           >
             <span className="material-symbols-outlined">search</span>
           </button>
-          <button className="flex items-center justify-center size-10 rounded-full bg-surface-dark text-white hover:bg-white/10 transition-colors">
-            <span className="material-symbols-outlined">filter_list</span>
+          <button
+            onClick={handleOpenAdd}
+            className="flex items-center justify-center size-10 rounded-full bg-primary text-background-dark hover:bg-green-500 transition-colors"
+            title="Adicionar Item"
+          >
+            <span className="material-symbols-outlined">add</span>
           </button>
         </div>
       </div>

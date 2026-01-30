@@ -2,11 +2,11 @@ import React from 'react';
 import { useUser } from '../contexts/UserContext';
 
 const PendingApprovalScreen = () => {
-    const { logout, teamDetails, intendedRole } = useUser();
+    const { logout, teamDetails, intendedRole, status } = useUser();
 
     const handleLogout = async () => {
         await logout();
-        window.location.href = '#/login';
+        window.location.href = '#/';
         window.location.reload();
     };
 
@@ -40,13 +40,18 @@ const PendingApprovalScreen = () => {
             <div className="w-full max-w-xs p-5 bg-surface-dark/50 rounded-2xl border border-white/5 flex flex-col gap-3 mb-8">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="size-2 bg-yellow-500 rounded-full animate-ping"></div>
+                        <div className={`size-2 rounded-full animate-ping ${status === 'approved' ? 'bg-primary' : 'bg-yellow-500'}`}></div>
                         <p className="text-slate-300 text-sm font-medium">Status da Solicitação</p>
                     </div>
-                    <span className="text-yellow-500 font-bold text-xs uppercase tracking-wider">Pendente</span>
+                    <span className={`font-bold text-xs uppercase tracking-wider ${status === 'approved' ? 'text-primary' : 'text-yellow-500'}`}>
+                        {status === 'approved' ? 'Aprovado' : 'Pendente'}
+                    </span>
                 </div>
                 <div className="h-2 w-full bg-background-dark rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-yellow-500/50 to-yellow-500 w-1/3 rounded-full animate-pulse"></div>
+                    <div className={`h-full bg-gradient-to-r rounded-full animate-pulse transition-all duration-1000 ${status === 'approved'
+                        ? 'from-primary/50 to-primary w-full'
+                        : 'from-yellow-500/50 to-yellow-500 w-1/3'
+                        }`}></div>
                 </div>
             </div>
 

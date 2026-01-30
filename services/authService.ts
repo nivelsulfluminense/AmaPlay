@@ -15,17 +15,36 @@ export const authService = {
      * 🔹 CARREGA APENAS O PERFIL
      * ❌ SEM JOIN COM TEAMS
      * ✔️ Seguro com RLS
+     * ✔️ Usa maybeSingle() para evitar erro em primeira tentativa
      */
     getFullProfile: async (userId: string): Promise<User | null> => {
         const { data: profile, error } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
-        if (error || !profile) {
+        if (error) {
             console.error('Erro ao carregar perfil:', error);
             return null;
+        }
+
+        if (!profile) {
+            console.warn('Perfil não encontrado para:', userId);
+            return null;
+        }
+
+        if (profile.team_id) {
+            const { data: team } = await supabase
+                .from('teams')
+                .select('*')
+                .eq('id', profile.team_id)
+                .maybeSingle();
+
+            return {
+                ...profile,
+                teamDetails: team || null
+            };
         }
 
         return {
@@ -36,57 +55,118 @@ export const authService = {
 
     /**
      * 🔐 LOGIN
+     * ✔️ Usa getUser() antes de buscar perfil
+     * ✔️ Usa maybeSingle() 
+     * ✔️ Mensagens de erro distintas
+     * ❌ SEM JOIN com teams no primeiro login
      */
     login: async (email: string, pass: string): Promise<User> => {
+        // 1️⃣ Autenticar
         const { data, error } = await supabase.auth.signInWithPassword({
             email,
             password: pass
         });
 
         if (error) {
-            let message = error.message;
-            if (message === 'Invalid login credentials') {
-                message = 'E-mail ou senha incorretos.';
-            } else if (message === 'Email not confirmed') {
-                message = 'E-mail não confirmado. Verifique sua caixa de entrada.';
+            console.error('❌ Erro de Autenticação:', error);
+
+            // Mensagens de erro distintas
+            if (error.message === 'Invalid login credentials') {
+                throw new Error('E-mail ou senha incorretos.');
+            } else if (error.message === 'Email not confirmed') {
+                throw new Error('E-mail não confirmado. Verifique sua caixa de entrada.');
             }
-            throw new Error(message);
+            throw new Error(`Erro na autenticação: ${error.message}`);
         }
 
-        if (!data.user) {
-            throw new Error('Falha na autenticação.');
+        if (!data.user || !data.session) {
+            throw new Error('Sessão inválida. Por favor, tente novamente.');
         }
 
-        let fullProfile = await authService.getFullProfile(data.user.id);
+        // 2️⃣ Validar sessão com getUser()
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-        if (!fullProfile) {
-            // Failsafe: Tenta criar o perfil se ele não existir por algum problema no trigger
-            console.warn('Perfil não encontrado no login, tentando criação failsafe...');
+        if (userError || !user) {
+            console.error('❌ Erro ao validar sessão:', userError);
+            await supabase.auth.signOut();
+            throw new Error('Sessão inválida. Por favor, faça login novamente.');
+        }
+
+        console.log('✅ Sessão validada para:', user.id);
+
+        // 3️⃣ Buscar perfil (com maybeSingle)
+        const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        // Mensagens de erro distintas
+        if (profileError) {
+            console.error('❌ Erro RLS/Database:', profileError);
+            await supabase.auth.signOut();
+            throw new Error('RLS bloqueando acesso ao perfil. Contate o suporte.');
+        }
+
+        if (!profile) {
+            console.warn('⚠️ Perfil inexistente para:', user.id);
+
+            // Failsafe: Tentar criar perfil
             const { error: insertError } = await supabase.from('profiles').insert({
-                id: data.user.id,
-                email: data.user.email,
-                name: (data.user.user_metadata as any)?.name || 'Visitante',
+                id: user.id,
+                email: user.email!,
+                name: user.user_metadata?.name || user.user_metadata?.full_name || 'Visitante',
                 role: 'player',
-                status: 'pending'
+                intended_role: 'player',
+                status: 'pending',
+                is_setup_complete: false,
+                is_public: true
             });
 
-            if (!insertError) {
-                fullProfile = await authService.getFullProfile(data.user.id);
+            if (insertError) {
+                console.error('❌ Erro ao criar perfil:', insertError);
+                await supabase.auth.signOut();
+                throw new Error('Não foi possível criar seu perfil. Contate o suporte.');
             }
+
+            // Buscar perfil criado
+            const { data: newProfile, error: newProfileError } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .maybeSingle();
+
+            if (newProfileError || !newProfile) {
+                console.error('❌ Perfil não encontrado após criação:', newProfileError);
+                await supabase.auth.signOut();
+                throw new Error('Perfil inexistente. Por favor, contate o suporte.');
+            }
+
+            return {
+                ...newProfile,
+                token: data.session.access_token,
+                teamDetails: null
+            };
         }
 
-        if (!fullProfile) {
-            await supabase.auth.signOut();
-            throw new Error(
-                'Não foi possível encontrar ou criar seu perfil. Por favor, tente novamente ou contate o suporte.'
-            );
+        // 4️⃣ Buscar detalhes do time separadamente (Evita RLS erro no join)
+        let teamDetails = null;
+        if (profile.team_id) {
+            const { data: team } = await supabase
+                .from('teams')
+                .select('*')
+                .eq('id', profile.team_id)
+                .maybeSingle();
+            teamDetails = team || null;
         }
 
         return {
-            ...fullProfile,
-            token: data.session?.access_token
+            ...profile,
+            token: data.session.access_token,
+            teamDetails
         };
     },
+
 
     /**
      * 📝 REGISTRO
@@ -103,7 +183,7 @@ export const authService = {
                         name: name || '',
                         full_name: name || ''
                     },
-                    emailRedirectTo: `${window.location.origin}/login?type=signup`
+                    emailRedirectTo: `${window.location.origin}/?type=signup`
                 }
             });
 

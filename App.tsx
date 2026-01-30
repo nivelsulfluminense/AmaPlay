@@ -137,6 +137,7 @@ const BottomNav = () => {
 };
 
 const Layout = ({ children }: { children?: React.ReactNode }) => {
+  useAuthRedirect();
   return (
     <div className="min-h-screen w-full bg-background-dark flex justify-center">
       <div className="w-full max-w-md relative bg-background-dark min-h-screen shadow-2xl overflow-hidden flex flex-col">

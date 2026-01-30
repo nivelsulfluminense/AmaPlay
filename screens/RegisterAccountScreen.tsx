@@ -14,6 +14,8 @@ const RegisterScreen = () => {
   });
   const [localError, setLocalError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -72,7 +74,7 @@ const RegisterScreen = () => {
 
       // Redirect to login after 3 seconds
       setTimeout(() => {
-        navigate('/login');
+        navigate('/');
       }, 3000);
 
     } catch (err: any) {
@@ -181,7 +183,7 @@ const RegisterScreen = () => {
               <input
                 id="password"
                 name="password"
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="Crie uma senha (mínimo 6 caracteres)"
                 className="w-full h-14 bg-input-bg border border-input-border rounded-xl pl-12 pr-12 text-white placeholder:text-slate-500 focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
                 value={formData.password}
@@ -193,6 +195,15 @@ const RegisterScreen = () => {
               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors">
                 <span className="material-symbols-outlined">lock</span>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors p-1"
+              >
+                <span className="material-symbols-outlined text-xl">
+                  {showPassword ? "visibility" : "visibility_off"}
+                </span>
+              </button>
             </div>
           </div>
 
@@ -203,7 +214,7 @@ const RegisterScreen = () => {
               <input
                 id="confirmPassword"
                 name="confirmPassword"
-                type="password"
+                type={showConfirmPassword ? "text" : "password"}
                 placeholder="Confirme sua senha"
                 className="w-full h-14 bg-input-bg border border-input-border rounded-xl pl-12 pr-12 text-white placeholder:text-slate-500 focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
                 value={formData.confirmPassword}
@@ -215,6 +226,15 @@ const RegisterScreen = () => {
               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors">
                 <span className="material-symbols-outlined">lock_reset</span>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors p-1"
+              >
+                <span className="material-symbols-outlined text-xl">
+                  {showConfirmPassword ? "visibility" : "visibility_off"}
+                </span>
+              </button>
             </div>
           </div>
 
@@ -260,7 +280,7 @@ const RegisterScreen = () => {
         {/* Social Login */}
         <div className="grid grid-cols-2 w-full gap-4 mb-8">
           <button
-            onClick={() => navigate('/login')}
+            onClick={() => navigate('/')}
             disabled={isLoading}
             className="h-12 bg-input-bg border border-input-border hover:bg-input-border/50 rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
           >
@@ -289,7 +309,7 @@ const RegisterScreen = () => {
           <p>
             Já tem uma conta?{' '}
             <button
-              onClick={() => navigate('/login')}
+              onClick={() => navigate('/')}
               className="text-primary font-bold hover:underline decoration-2 underline-offset-4 transition-all"
             >
               Faça login

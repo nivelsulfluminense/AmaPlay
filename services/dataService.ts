@@ -60,7 +60,6 @@ export interface Player {
     heartTeamId?: string | null;
     cardAvatar?: string | null;
     role?: Role;
-    is_approved?: boolean;
     is_first_manager?: boolean;
     createdAt: string;
 }
@@ -136,7 +135,7 @@ export const dataService = {
                 .from('profiles')
                 .select('*')
                 .eq('team_id', profile.team_id)
-                .eq('is_approved', false);
+                .eq('status', 'pending');
 
             const { data, error } = await query;
             if (error) return [];
@@ -411,7 +410,7 @@ export const dataService = {
                 .order('created_at', { ascending: false });
 
             if (teamId) {
-                query = query.eq('team_id', teamId).eq('is_approved', true);
+                query = query.eq('team_id', teamId).eq('status', 'approved');
             }
 
             const { data, error } = await query;
@@ -439,7 +438,6 @@ export const dataService = {
                 heartTeamId: p.heart_team,
                 cardAvatar: p.card_avatar,
                 role: p.role,
-                is_approved: p.is_approved,
                 is_first_manager: p.is_first_manager,
                 createdAt: p.created_at
             }));

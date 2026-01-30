@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { dataService } from '../services/dataService';
 import { useUser } from '../contexts/UserContext';
+import { authService } from '../services/authService';
 
 const ScoutsScreen = () => {
   const navigate = useNavigate();
-  const { name, avatar } = useUser(); // Get current user info
+  const { name, avatar, teamId } = useUser(); // Get current user info
   const [loading, setLoading] = useState(false);
   const [cep, setCep] = useState('');
   const [phone, setPhone] = useState('');
@@ -89,45 +89,39 @@ const ScoutsScreen = () => {
   const handleSave = async () => {
     setLoading(true);
     try {
-      // Try to find existing player by name/avatar logic or just create new for current user
-      // For this mock, we'll search by name or create
-      const players = await dataService.players.list();
-      const existing = players.find(p => p.name === fullName || p.name === name);
-
-      const playerData: any = {
+      // 🔑 UPDATE PROFILE via authService
+      await authService.updateProfile({
         name: fullName,
         phone,
-        birthDate,
+        birth_date: birthDate,
         address: {
           cep,
           ...address,
           number
-        },
-        // Maintain existing fields if updating
-        ...(existing || {
-          position: 'ATA', // Default
-          avatar: avatar || 'https://i.pravatar.cc/150?u=me',
-          teamId: parseInt(localStorage.getItem('amaplay_current_team_id') || '101'),
-          stats: { pace: 70, shooting: 70, passing: 70, dribbling: 70, defending: 70, physical: 70 },
-          ovr: 70,
-          maxScout: 0
-        })
-      };
+        }
+      });
 
-      if (existing) {
-        await dataService.players.save({ ...playerData, id: existing.id });
-      } else {
-        await dataService.players.save(playerData);
-      }
-
-      // Navigate to pro-selection
+      // 🏆 Navigate to next step
       navigate('/pro-selection');
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error saving profile", e);
-      alert("Erro ao salvar dados.");
+      alert(e.message || "Erro ao salvar dados.");
     } finally {
       setLoading(false);
     }
+  };
+
+  // 🔑 VALIDATION: Button only enabled when ALL required fields are filled
+  const isFormValid = () => {
+    return Boolean(
+      fullName.trim() &&
+      birthDate &&
+      phone.replace(/\D/g, '').length >= 10 && // At least 10 digits
+      cep.replace(/\D/g, '').length === 8 && // CEP must be complete
+      number.trim() &&
+      address.street && // Auto-filled from CEP
+      address.city
+    );
   };
 
   return (
@@ -157,6 +151,7 @@ const ScoutsScreen = () => {
               placeholder="Digite seu nome completo"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
+              required
             />
           </div>
 
@@ -169,6 +164,7 @@ const ScoutsScreen = () => {
                 value={birthDate}
                 onChange={(e) => setBirthDate(e.target.value)}
                 className="w-full bg-surface-dark border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-primary focus:ring-0 transition-colors [color-scheme:dark]"
+                required
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -190,6 +186,7 @@ const ScoutsScreen = () => {
                 maxLength={15}
                 className="flex-1 bg-surface-dark border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-primary focus:ring-0 transition-colors placeholder:text-slate-600"
                 placeholder="(00) 00000-0000"
+                required
               />
               <button
                 type="button"
@@ -223,6 +220,7 @@ const ScoutsScreen = () => {
                   maxLength={9}
                   className="w-full bg-surface-dark border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-primary focus:ring-0 transition-colors placeholder:text-slate-600"
                   placeholder="00000-000"
+                  required
                 />
                 {loading && (
                   <div className="absolute right-4 top-1/2 -translate-y-1/2">
@@ -250,6 +248,7 @@ const ScoutsScreen = () => {
                   value={number}
                   onChange={(e) => setNumber(e.target.value)}
                   className="w-full bg-surface-dark border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-primary focus:ring-0 transition-colors"
+                  required
                 />
               </div>
               <div className="col-span-2 flex flex-col gap-1.5">
@@ -291,11 +290,14 @@ const ScoutsScreen = () => {
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background-dark via-background-dark to-transparent z-10 w-full max-w-md mx-auto">
         <button
           onClick={handleSave}
-          disabled={loading}
-          className="w-full bg-primary text-primary-content font-bold text-lg rounded-full py-4 shadow-lg shadow-primary/25 hover:shadow-primary/40 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          disabled={loading || !isFormValid()}
+          className={`w-full font-bold text-lg rounded-full py-4 flex items-center justify-center gap-2 transition-all ${isFormValid() && !loading
+            ? 'bg-primary text-primary-content shadow-lg shadow-primary/25 hover:shadow-primary/40 active:scale-[0.98]'
+            : 'bg-surface-dark text-slate-500 border border-white/10 cursor-not-allowed opacity-60'
+            }`}
         >
           {loading ? 'Salvando...' : 'Salvar Dados'}
-          {!loading && <span className="material-symbols-outlined text-xl">save</span>}
+          {!loading && isFormValid() && <span className="material-symbols-outlined text-xl">save</span>}
         </button>
       </div>
     </div>

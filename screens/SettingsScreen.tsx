@@ -3,18 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 import { dataService } from '../services/dataService';
 import { authService } from '../services/authService';
+import { supabase } from '../services/supabase';
 
 interface TeamMember {
     id: string;
     name: string;
     avatar: string;
     role: 'presidente' | 'vice-presidente' | 'admin' | 'player';
-    is_approved: boolean;
+    status: 'pending' | 'approved' | 'rejected';
 }
 
 const SettingsScreen = () => {
     const navigate = useNavigate();
-    const { role, name, email, userId, teamId, logout } = useUser();
+    const { role, name, email, userId, teamId, logout, updateMemberRole, removeMember } = useUser();
     const [activeTab, setActiveTab] = useState<'personal' | 'management'>('personal');
 
     // Personal Settings State
@@ -66,7 +67,7 @@ const SettingsScreen = () => {
                 name: p.name,
                 avatar: p.avatar,
                 role: p.role || 'player',
-                is_approved: !!p.is_approved
+                status: (p as any).status || 'approved'
             }));
             setTeamMembers(members);
         } catch (error) {
@@ -133,14 +134,14 @@ const SettingsScreen = () => {
         if (!selectedMember) return;
         setLoading(true);
         try {
-            await authService.updateProfile({
-                role: promoteToRole,
-                is_approved: true
-            });
-            showSuccess(`${selectedMember.name} promovido(a) a ${promoteToRole}!`);
-            setShowPromoteModal(false);
-            setSelectedMember(null);
-            await loadTeamMembers();
+            const success = await updateMemberRole(selectedMember.id, selectedMember.role, promoteToRole);
+
+            if (success) {
+                showSuccess(`${selectedMember.name} promovido(a) a ${promoteToRole}!`);
+                setShowPromoteModal(false);
+                setSelectedMember(null);
+                await loadTeamMembers();
+            }
         } catch (error: any) {
             showError(error.message || 'Erro ao promover membro');
         } finally {
@@ -152,14 +153,14 @@ const SettingsScreen = () => {
         if (!selectedMember) return;
         setLoading(true);
         try {
-            await authService.updateProfile({
-                team_id: null,
-                is_approved: false
-            });
-            showSuccess(`${selectedMember.name} removido(a) do time`);
-            setShowRemoveModal(false);
-            setSelectedMember(null);
-            await loadTeamMembers();
+            const success = await removeMember(selectedMember.id);
+
+            if (success) {
+                showSuccess(`${selectedMember.name} removido(a) do time`);
+                setShowRemoveModal(false);
+                setSelectedMember(null);
+                await loadTeamMembers();
+            }
         } catch (error: any) {
             showError(error.message || 'Erro ao remover membro');
         } finally {
@@ -371,6 +372,36 @@ const SettingsScreen = () => {
                             >
                                 <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform ${notificationsEnabled ? 'translate-x-6' : ''
                                     }`}></div>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* AmaPlay Pro Settings */}
+                    <div className="bg-surface-dark rounded-2xl border border-white/5 p-6">
+                        <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
+                            <span className="material-symbols-outlined text-primary">military_tech</span>
+                            AmaPlay Pro
+                        </h3>
+                        <p className="text-slate-400 text-sm mb-4">Gerencie sua participação no sistema de scouts profissional</p>
+
+                        <div className="space-y-3">
+                            <button
+                                onClick={() => navigate('/scouts')}
+                                className="w-full py-3 bg-primary/20 text-primary font-bold rounded-xl hover:bg-primary/30 transition-colors border border-primary/30 flex items-center justify-center gap-2"
+                            >
+                                <span className="material-symbols-outlined">edit</span>
+                                Atualizar Dados Pro
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (window.confirm('Tem certeza que deseja cancelar sua participação no AmaPlay Pro? Seus dados serão mantidos mas você não aparecerá mais nos scouts.')) {
+                                        // TODO: Implement cancel Pro participation
+                                        alert('Funcionalidade em desenvolvimento');
+                                    }
+                                }}
+                                className="w-full py-3 bg-red-500/10 text-red-400 font-bold rounded-xl hover:bg-red-500/20 transition-colors border border-red-500/20"
+                            >
+                                Cancelar Participação Pro
                             </button>
                         </div>
                     </div>

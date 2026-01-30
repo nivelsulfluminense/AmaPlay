@@ -17,7 +17,7 @@ interface PlayerFinanceStatus {
 
 const FinanceScreen = () => {
     const location = useLocation();
-    const { role, name, avatar, teamId } = useUser();
+    const { role, name, avatar, teamId, approveMember, rejectMember } = useUser();
     const [activeTab, setActiveTab] = useState<'transactions' | 'status' | 'validations'>('transactions');
 
     // Async Data State
@@ -196,17 +196,25 @@ const FinanceScreen = () => {
         }
     };
 
-    const handleApproveMember = async (memberId: string, approved: boolean) => {
+    const handleApproveMember = async (member: any, approved: boolean) => {
         setIsLoading(true);
         try {
-            const newStatus = approved ? 'approved' : 'rejected';
-            const { error } = await supabase
-                .from('profiles')
-                .update({ status: newStatus })
-                .eq('id', memberId);
+            let success = false;
+            if (approved) {
+                success = await approveMember(member.id);
+            } else {
+                success = await rejectMember(member.id);
+            }
 
-            if (error) throw error;
-            setPendingMembers(prev => prev.filter(m => m.id !== memberId));
+            if (success) {
+                // 🔑 Remove from pending list immediately to prevent re-appearance
+                setPendingMembers(prev => prev.filter(m => m.id !== member.id));
+                if (approved) {
+                    alert('Membro aprovado com sucesso!');
+                } else {
+                    alert('Solicitação rejeitada.');
+                }
+            }
         } catch (err: any) {
             alert(err.message || 'Erro ao processar aprovação');
         } finally {
@@ -439,8 +447,8 @@ const FinanceScreen = () => {
                                             </div>
                                         </div>
                                         <div className="flex gap-2">
-                                            <button onClick={() => handleApproveMember(member.id, false)} className="flex-1 py-3 bg-white/5 text-red-400 text-xs font-bold rounded-xl border border-white/5">Recusar</button>
-                                            <button onClick={() => handleApproveMember(member.id, true)} className="flex-1 py-3 bg-primary text-background-dark text-xs font-bold rounded-xl">Aprovar Membro</button>
+                                            <button onClick={() => handleApproveMember(member, false)} className="flex-1 py-3 bg-white/5 text-red-400 text-xs font-bold rounded-xl border border-white/5">Recusar</button>
+                                            <button onClick={() => handleApproveMember(member, true)} className="flex-1 py-3 bg-primary text-background-dark text-xs font-bold rounded-xl">Aprovar Membro</button>
                                         </div>
                                     </div>
                                 ))
