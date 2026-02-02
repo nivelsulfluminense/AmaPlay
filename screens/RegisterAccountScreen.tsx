@@ -7,7 +7,6 @@ const RegisterScreen = () => {
   const { register, isLoading, error, clearError } = useUser();
 
   const [formData, setFormData] = useState({
-    name: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -39,11 +38,7 @@ const RegisterScreen = () => {
       return false;
     }
 
-    // Name validation
-    if (formData.name.trim().length < 2) {
-      setLocalError('O nome deve ter pelo menos 2 caracteres');
-      return false;
-    }
+
 
     // Password validation
     if (formData.password.length < 6) {
@@ -67,7 +62,7 @@ const RegisterScreen = () => {
 
     try {
       // Call register function from UserContext
-      await register(formData.email, formData.password, formData.name.trim());
+      await register(formData.email, formData.password);
 
       // Success message
       setSuccessMessage('Conta criada com sucesso! Verifique seu e-mail para confirmar sua conta.');
@@ -132,27 +127,7 @@ const RegisterScreen = () => {
 
         {/* Registration Form */}
         <form className="w-full flex flex-col gap-5" onSubmit={handleSubmit}>
-          {/* Name Field */}
-          <div className="space-y-1">
-            <label className="sr-only" htmlFor="name">Nome Completo</label>
-            <div className="relative group">
-              <input
-                id="name"
-                name="name"
-                type="text"
-                placeholder="Seu nome completo"
-                className="w-full h-14 bg-input-bg border border-input-border rounded-xl pl-12 pr-4 text-white placeholder:text-slate-500 focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
-                value={formData.name}
-                onChange={handleChange}
-                disabled={isLoading}
-                required
-                autoComplete="name"
-              />
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors">
-                <span className="material-symbols-outlined">person</span>
-              </div>
-            </div>
-          </div>
+
 
           {/* Email Field */}
           <div className="space-y-1">
@@ -253,9 +228,9 @@ const RegisterScreen = () => {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isLoading || !formData.name || !formData.email || !formData.password || !formData.confirmPassword}
+            disabled={isLoading || !formData.email || !formData.password || !formData.confirmPassword}
             className={`w-full h-14 font-bold text-lg rounded-xl flex items-center justify-center gap-2 transition-all duration-200 
-                        ${(!isLoading && formData.name && formData.email && formData.password && formData.confirmPassword)
+                        ${(!isLoading && formData.email && formData.password && formData.confirmPassword)
                 ? 'bg-primary text-background-dark hover:bg-[#0fd650] active:scale-[0.98] shadow-glow'
                 : 'bg-surface-dark border border-white/10 text-slate-500 cursor-not-allowed'}`}
           >

@@ -116,8 +116,8 @@ export const authService = {
                 id: user.id,
                 email: user.email!,
                 name: user.user_metadata?.name || user.user_metadata?.full_name || 'Visitante',
-                role: 'player',
-                intended_role: 'player',
+                role: null,
+                intended_role: null,
                 status: 'pending',
                 is_setup_complete: false,
                 is_public: true

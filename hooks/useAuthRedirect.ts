@@ -60,7 +60,7 @@ export const useAuthRedirect = () => {
         // ONBOARDING FLOW (Setup NOT complete)
         if (!hasSetupComplete) {
             // Step 1: Selecionar Função
-            if (!intendedRole || (role === 'player' && !intendedRole)) {
+            if (!intendedRole) {
                 idealPath = '/register-role';
             }
             // Step 2: Criar/Buscar Time
@@ -68,25 +68,18 @@ export const useAuthRedirect = () => {
                 idealPath = '/register-team';
             }
             // Step 3: Privacidade (MANDATORY after team)
-            else if (currentPath !== '/register-privacy' && currentPath !== '/register-profile') {
-                // If we have team but haven't been to privacy yet, go there
-                // We'll assume they've been to privacy if they're on profile screen
-                const hasVisitedPrivacy = currentPath === '/register-profile' || (!!name && name !== 'Visitante');
-                if (!hasVisitedPrivacy) {
-                    idealPath = '/register-privacy';
-                } else {
-                    // Step 4: Dados do Atleta
-                    if (!name || name === 'Visitante' || !position) {
-                        idealPath = '/register-profile';
-                    }
-                }
-            }
-            // If on privacy screen, that's fine (don't redirect)
+            // Se já tem time, OBRIGATORIAMENTE vai para privacidade antes do perfil
+            // A única e xceção é se ele já ESTIVER na tela de privacidade ou perfil (mas perfil só se já passou pela privacidade logicamente, o que controlaremos pelo clique do botão)
             else if (currentPath === '/register-privacy') {
                 idealPath = '/register-privacy';
             }
-            // Step 4: Dados do Atleta
-            else if (!name || name === 'Visitante' || !position) {
+            // Se está tentando ir para o perfil mas não passou pela privacidade (ainda amarrado via navegação do botão)
+            // Vamos forçar privacidade como o próximo passo lógico se ele não estiver no perfil
+            else if (currentPath !== '/register-profile') {
+                idealPath = '/register-privacy';
+            }
+            // Step 4: Dados do Atleta (Se chegou aqui, já tem role, team e passou pela privacidade)
+            else {
                 idealPath = '/register-profile';
             }
         }

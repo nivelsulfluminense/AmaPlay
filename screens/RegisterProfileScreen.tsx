@@ -2,11 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 import * as faceapi from '@vladmandic/face-api';
-import { dataService, CustomTeam } from '../services/dataService';
+// dataService and CustomTeam are no longer needed here
 
 const RegisterProfileScreen = () => {
   const navigate = useNavigate();
-  const { setName, markSetupComplete, setAvatar, teamDetails, teamId, role, intendedRole, isApproved } = useUser();
+  const { name, setName, markSetupComplete, setAvatar, teamDetails, teamId, role, intendedRole, isApproved } = useUser();
 
   // Form States
   const [inputValue, setInputValue] = useState('');
@@ -16,14 +16,17 @@ const RegisterProfileScreen = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [modelsLoaded, setModelsLoaded] = useState(false);
 
+  // Prefill name if available (e.g. from Social Login)
+  useEffect(() => {
+    if (name && name !== 'Visitante') {
+      setInputValue(name);
+    }
+  }, [name]);
+
   // Heart Team Selection States
   const [selectedHeartTeam, setSelectedHeartTeam] = useState<string | null>(null);
   const [showChangeTeamModal, setShowChangeTeamModal] = useState(false);
 
-  // Amateur Teams to Join
-  const [requestedTeams, setRequestedTeams] = useState<string[]>([]);
-  const [customTeams, setCustomTeams] = useState<CustomTeam[]>([]);
-  const [loadingTeams, setLoadingTeams] = useState(true);
   const [isPublicProfile, setIsPublicProfile] = useState(true);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
@@ -46,22 +49,6 @@ const RegisterProfileScreen = () => {
       }
     };
     loadModels();
-  }, []);
-
-  // Load Custom Teams
-  useEffect(() => {
-    const loadTeams = async () => {
-      setLoadingTeams(true);
-      try {
-        const teams = await dataService.customTeams.list();
-        setCustomTeams(teams.filter(t => t.isPublic)); // Only show public teams
-      } catch (err) {
-        console.error("Failed to load custom teams", err);
-      } finally {
-        setLoadingTeams(false);
-      }
-    };
-    loadTeams();
   }, []);
 
   // Algorithm to Center Face
@@ -226,13 +213,7 @@ const RegisterProfileScreen = () => {
     }
   };
 
-  const toggleTeamRequest = (teamId: string) => {
-    setRequestedTeams(prev =>
-      prev.includes(teamId)
-        ? prev.filter(id => id !== teamId)
-        : [...prev, teamId]
-    );
-  };
+
 
   const handleTeamClick = (teamId: string) => {
     if (selectedHeartTeam === teamId) {
@@ -507,74 +488,6 @@ const RegisterProfileScreen = () => {
           </div>
 
           <div className="h-px bg-white/10 w-full my-2"></div>
-
-          {/* Amateur Teams to Join */}
-          <div className="flex flex-col gap-3">
-            <div className="flex justify-between items-baseline px-2">
-              <label className="text-sm font-bold text-slate-300 uppercase tracking-wider">Times para Jogar</label>
-            </div>
-            <p className="text-xs text-slate-500 px-2 -mt-2 mb-2">Selecione os times amadores que você participa.</p>
-
-            <div className="relative mb-3">
-              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">search</span>
-              <input
-                type="text"
-                placeholder="Buscar time pelo nome..."
-                className="w-full bg-surface-dark border border-white/10 rounded-xl py-3 pl-12 pr-4 text-sm text-white focus:border-primary focus:ring-0"
-              />
-            </div>
-
-            <div className="flex flex-col gap-3">
-              {loadingTeams ? (
-                <div className="flex flex-col gap-3">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="p-3 rounded-xl bg-surface-dark/50 border border-white/5 h-16 animate-pulse" />
-                  ))}
-                </div>
-              ) : customTeams.length > 0 ? (
-                customTeams.map((team) => {
-                  const isRequested = requestedTeams.includes(team.id);
-                  return (
-                    <div key={team.id} className="flex items-center p-3 rounded-xl bg-surface-dark border border-white/5 gap-3">
-                      <div className="size-12 rounded-lg bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-white font-bold text-lg">
-                        {team.logo ? <img src={team.logo} alt={team.name} className="w-full h-full object-contain rounded-lg" /> : team.name.substring(0, 1)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-white font-bold text-sm truncate">{team.name}</h4>
-                        <p className="text-slate-400 text-xs flex items-center gap-1">
-                          <span className="material-symbols-outlined text-[12px]">location_on</span>
-                          {team.location}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => toggleTeamRequest(team.id)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${isRequested
-                          ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
-                          : 'bg-primary text-background-dark hover:bg-primary-dark'
-                          }`}
-                      >
-                        {isRequested ? (
-                          <>
-                            <span className="material-symbols-outlined text-[14px]">hourglass_empty</span>
-                            Pendente
-                          </>
-                        ) : (
-                          'Solicitar'
-                        )}
-                      </button>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-center py-8 text-slate-500">
-                  <span className="material-symbols-outlined text-3xl mb-2 opacity-50">group_off</span>
-                  <p className="text-sm">Nenhum time disponível no momento.</p>
-                </div>
-              )}
-            </div>
-          </div>
-
         </form>
       </main>
 

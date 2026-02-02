@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { authService } from '../services/authService';
 import { supabase, Profile } from '../services/supabase';
 
-export type Role = 'presidente' | 'vice-presidente' | 'admin' | 'player';
+export type Role = 'presidente' | 'vice-presidente' | 'admin' | 'player' | null;
 
 interface TeamDetails {
   name: string;
@@ -77,8 +77,8 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   // User state
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState('');
-  const [role, setRoleState] = useState<Role>('player');
-  const [intendedRole, setIntendedRoleState] = useState<Role>('player');
+  const [role, setRoleState] = useState<Role>(null);
+  const [intendedRole, setIntendedRoleState] = useState<Role>(null);
   const [name, setNameState] = useState('Visitante');
   const [avatar, setAvatarState] = useState<string | null>(null);
   const [cardAvatar, setCardAvatarState] = useState<string | null>(null);
@@ -111,7 +111,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     setUserId(userData.id || userData.userId || null);
     setEmail(userData.email || '');
     setNameState(userData.name || userData.full_name || 'Visitante');
-    setRoleState(userData.role || 'player');
+    setRoleState(userData.role || null);
     setAvatarState(userData.avatar || null);
     setCardAvatarState(userData.card_avatar || null);
     setTeamIdState(userData.team_id || null);
@@ -224,7 +224,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const resetState = () => {
     setUserId(null);
     setEmail('');
-    setRoleState('player');
+    setRoleState(null);
     setNameState('Visitante');
     setAvatarState(null);
     setCardAvatarState(null);
