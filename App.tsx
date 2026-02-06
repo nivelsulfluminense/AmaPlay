@@ -22,6 +22,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import PendingApprovalScreen from './screens/PendingApprovalScreen';
 import ScoringScreen from './screens/ScoringScreen';
+import { RuleBookScreen } from './screens/RuleBookScreen';
 import { UserProvider, useUser } from './contexts/UserContext';
 import { useAuthRedirect } from './hooks/useAuthRedirect';
 
@@ -261,6 +262,12 @@ const App = () => {
               <PrivateRoute>
                 <PlayerPaymentsScreen />
               </PrivateRoute>
+            } />
+
+            <Route path="/rule-book" element={
+              <ProtectedRoute restrictedTo={['presidente', 'vice-presidente', 'admin', 'player']}>
+                <RuleBookScreen />
+              </ProtectedRoute>
             } />
 
             <Route path="/settings" element={

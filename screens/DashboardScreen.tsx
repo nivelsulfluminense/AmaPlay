@@ -330,6 +330,16 @@ const DashboardScreen = () => {
               <span className="text-xs font-medium text-slate-300 text-center leading-tight">Scoring</span>
             </button>
 
+            <button
+              onClick={() => navigate('/rule-book')}
+              className="flex flex-col items-center gap-3 group"
+            >
+              <div className="size-16 rounded-full bg-surface-dark border border-white/10 flex items-center justify-center text-white group-active:scale-95 transition-all hover:bg-white/10 hover:border-primary/50">
+                <span className="material-symbols-outlined text-3xl">menu_book</span>
+              </div>
+              <span className="text-xs font-medium text-slate-300 text-center leading-tight">Livro de<br />Regras</span>
+            </button>
+
             {role === 'presidente' && (
               <button
                 onClick={() => navigate('/agenda')}

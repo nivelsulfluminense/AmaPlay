@@ -1458,6 +1458,93 @@ export const dataService = {
                 .eq('status', 'approved')
                 .order('created_at', { ascending: true });
             return data || [];
+        },
+
+        async history() {
+            return [];
+        }
+    },
+
+    rules: {
+        list: async () => {
+            const teamId = await getCurrentTeamId();
+            if (!teamId) return [];
+
+            const { data, error } = await supabase
+                .from('team_rules')
+                .select(`
+                    id,
+                    title,
+                    description,
+                    file_url,
+                    file_type,
+                    created_at,
+                    profiles:created_by (name, avatar)
+                `)
+                .eq('team_id', teamId)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error('Error fetching rules:', error);
+                return [];
+            }
+
+            return data;
+        },
+
+        create: async (title: string, description: string, file: File, type: 'pdf' | 'image') => {
+            const teamId = await getCurrentTeamId();
+            if (!teamId) throw new Error('User has no team');
+
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('No user logged in');
+
+            // 1. Upload file
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${teamId}/${Date.now()}.${fileExt}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('team-rules')
+                .upload(fileName, file);
+
+            if (uploadError) throw uploadError;
+
+            // 2. Get Public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('team-rules')
+                .getPublicUrl(fileName);
+
+            // 3. Save to DB
+            const { data, error } = await supabase
+                .from('team_rules')
+                .insert({
+                    team_id: teamId,
+                    title,
+                    description,
+                    file_url: publicUrl,
+                    file_type: type,
+                    created_by: user.id
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        },
+
+        delete: async (id: string, fileUrl: string) => {
+            // Extract path from URL roughly
+            const parts = fileUrl.split('team-rules/');
+            if (parts.length > 1) {
+                await supabase.storage.from('team-rules').remove([parts[1]]);
+            }
+
+            const { error } = await supabase
+                .from('team_rules')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
         }
     },
 };
