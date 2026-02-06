@@ -1,11 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 import { authService } from '../services/authService';
 
 const ScoutsScreen = () => {
   const navigate = useNavigate();
-  const { name, avatar, teamId } = useUser(); // Get current user info
+  const location = useLocation();
+  const { name, avatar, teamId, isPro, userId } = useUser(); // Get current user info
+
+  // Detect edit mode from URL
+  const isEditMode = location.search.includes('edit=true');
+
+  // Redirecionamento automático se já for PRO e NÃO estiver editando
+  useEffect(() => {
+    if (isPro && !isEditMode) {
+      navigate('/pro-selection');
+    }
+  }, [isPro, isEditMode, navigate]);
+
   const [loading, setLoading] = useState(false);
   const [cep, setCep] = useState('');
   const [phone, setPhone] = useState('');
@@ -16,10 +28,45 @@ const ScoutsScreen = () => {
     state: ''
   });
   const [number, setNumber] = useState('');
+  const [complement, setComplement] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [age, setAge] = useState<number | null>(null);
   const [isWhatsapp, setIsWhatsapp] = useState(true);
   const [fullName, setFullName] = useState(name || '');
+  const [acceptRules, setAcceptRules] = useState(false);
+
+  // Carregar dados existentes
+  useEffect(() => {
+    const loadProfileData = async () => {
+      if (!userId) return;
+      setLoading(true);
+      try {
+        const profile = await authService.getFullProfile(userId);
+        if (profile) {
+          setFullName(profile.name || name || '');
+          setPhone(profile.phone || '');
+          setBirthDate(profile.birth_date || '');
+          if (profile.address) {
+            setCep(profile.address.cep || '');
+            setAddress({
+              street: profile.address.street || '',
+              neighborhood: profile.address.neighborhood || '',
+              city: profile.address.city || '',
+              state: profile.address.state || ''
+            });
+            setNumber(profile.address.number || '');
+            setComplement(profile.address.complement || '');
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar dados do perfil", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfileData();
+  }, [userId, name]);
 
   // Mask Functions
   const maskCep = (value: string) => {
@@ -94,10 +141,12 @@ const ScoutsScreen = () => {
         name: fullName,
         phone,
         birth_date: birthDate,
+        is_pro: true, // Mark as Pro athlete
         address: {
           cep,
           ...address,
-          number
+          number,
+          complement
         }
       });
 
@@ -112,16 +161,20 @@ const ScoutsScreen = () => {
   };
 
   // 🔑 VALIDATION: Button only enabled when ALL required fields are filled
-  const isFormValid = () => {
+  const isBasicInfoComplete = () => {
     return Boolean(
       fullName.trim() &&
       birthDate &&
-      phone.replace(/\D/g, '').length >= 10 && // At least 10 digits
-      cep.replace(/\D/g, '').length === 8 && // CEP must be complete
+      phone.replace(/\D/g, '').length >= 10 &&
+      cep.replace(/\D/g, '').length === 8 &&
       number.trim() &&
-      address.street && // Auto-filled from CEP
-      address.city
+      address.street.trim() &&
+      address.city.trim()
     );
+  };
+
+  const isFormValid = () => {
+    return isBasicInfoComplete() && acceptRules;
   };
 
   return (
@@ -235,31 +288,45 @@ const ScoutsScreen = () => {
               <input
                 type="text"
                 value={address.street}
-                readOnly
-                className="w-full bg-surface-dark/50 border border-white/5 rounded-xl px-4 py-3.5 text-slate-300 focus:outline-none"
+                onChange={(e) => setAddress({ ...address, street: e.target.value })}
+                className="w-full bg-surface-dark border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-primary focus:ring-0 transition-colors placeholder:text-slate-600"
+                placeholder="Nome da rua"
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="col-span-1 flex flex-col gap-1.5">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-bold text-slate-300 ml-1">Número</label>
                 <input
                   type="text"
                   value={number}
                   onChange={(e) => setNumber(e.target.value)}
                   className="w-full bg-surface-dark border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-primary focus:ring-0 transition-colors"
+                  placeholder="Nº"
                   required
                 />
               </div>
-              <div className="col-span-2 flex flex-col gap-1.5">
-                <label className="text-sm font-bold text-slate-300 ml-1">Bairro</label>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-bold text-slate-300 ml-1">Complemento</label>
                 <input
                   type="text"
-                  value={address.neighborhood}
-                  readOnly
-                  className="w-full bg-surface-dark/50 border border-white/5 rounded-xl px-4 py-3.5 text-slate-300 focus:outline-none"
+                  value={complement}
+                  onChange={(e) => setComplement(e.target.value)}
+                  className="w-full bg-surface-dark border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-primary focus:ring-0 transition-colors placeholder:text-slate-600"
+                  placeholder="Apto, Bloco, etc."
                 />
               </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-bold text-slate-300 ml-1">Bairro</label>
+              <input
+                type="text"
+                value={address.neighborhood}
+                onChange={(e) => setAddress({ ...address, neighborhood: e.target.value })}
+                className="w-full bg-surface-dark border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-primary focus:ring-0 transition-colors placeholder:text-slate-600"
+                placeholder="Bairro"
+              />
             </div>
 
             <div className="grid grid-cols-3 gap-4">
@@ -268,8 +335,9 @@ const ScoutsScreen = () => {
                 <input
                   type="text"
                   value={address.city}
-                  readOnly
-                  className="w-full bg-surface-dark/50 border border-white/5 rounded-xl px-4 py-3.5 text-slate-300 focus:outline-none"
+                  onChange={(e) => setAddress({ ...address, city: e.target.value })}
+                  className="w-full bg-surface-dark border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-primary focus:ring-0 transition-colors placeholder:text-slate-600"
+                  placeholder="Cidade"
                 />
               </div>
               <div className="col-span-1 flex flex-col gap-1.5">
@@ -277,29 +345,82 @@ const ScoutsScreen = () => {
                 <input
                   type="text"
                   value={address.state}
-                  readOnly
-                  className="w-full bg-surface-dark/50 border border-white/5 rounded-xl px-4 py-3.5 text-slate-300 focus:outline-none"
+                  onChange={(e) => setAddress({ ...address, state: e.target.value.toUpperCase().substring(0, 2) })}
+                  className="w-full bg-surface-dark border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-primary focus:ring-0 transition-colors placeholder:text-slate-600"
+                  placeholder="UF"
                 />
               </div>
             </div>
+
+            {/* Aceite de Regras */}
+            <div className="mt-4 p-4 rounded-2xl bg-primary/5 border border-primary/20 flex flex-col gap-4">
+              <div className="flex items-start gap-3">
+                <div className="size-6 shrink-0 mt-0.5">
+                  <span className="material-symbols-outlined text-primary">gavel</span>
+                </div>
+                <div>
+                  <h4 className="text-white font-bold text-sm">Termos do AmaFut Pro</h4>
+                  <p className="text-slate-400 text-[11px] leading-relaxed">
+                    Ao confirmar, você concorda com as diretrizes de conduta, ética e performance do ecossistema AmaFut Pro.
+                    Seu perfil será validado para scouts e cards oficiais.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={!isBasicInfoComplete()}
+                onClick={() => setAcceptRules(!acceptRules)}
+                className={`w-full py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 transition-all ${!isBasicInfoComplete()
+                  ? 'bg-surface-dark/30 border-white/5 text-slate-600 cursor-not-allowed'
+                  : acceptRules
+                    ? 'bg-primary/20 border-primary text-primary'
+                    : 'bg-surface-dark border-white/10 text-slate-300 hover:border-white/20'
+                  }`}
+              >
+                <span className="material-symbols-outlined text-lg">
+                  {acceptRules ? 'check_box' : 'check_box_outline_blank'}
+                </span>
+                LI E ACEITO AS REGRAS DO AMAFUT PRO
+              </button>
+            </div>
           </div>
 
+
+          {/* Botão Salvar - Movido para dentro do fluxo para não ficar atrás da navbar */}
+          <div className="pt-4 pb-2">
+            <button
+              onClick={(e) => {
+                e.preventDefault(); // Prevent duplicated submit if inside form
+                if (!isFormValid()) {
+                  // Lógica para avisar o que está faltando
+                  const missing = [];
+                  if (!fullName.trim()) missing.push("Nome Completo");
+                  if (!birthDate) missing.push("Data de Nascimento");
+                  if (phone.replace(/\D/g, '').length < 10) missing.push("Celular Válido");
+                  if (cep.replace(/\D/g, '').length !== 8) missing.push("CEP Válido");
+                  if (!address.street.trim()) missing.push("Endereço (Rua)");
+                  if (!number.trim()) missing.push("Número");
+                  if (!address.city.trim()) missing.push("Cidade");
+                  if (!acceptRules) missing.push("Aceite dos Termos");
+
+                  alert(`Por favor, preencha os seguintes campos obrigatórios:\n\n- ${missing.join('\n- ')}`);
+                  return;
+                }
+                handleSave();
+              }}
+              disabled={loading} // Only disable if loading, not if invalid (to show alert)
+              className={`w-full font-bold text-lg rounded-full py-4 flex items-center justify-center gap-2 transition-all ${isFormValid() && !loading
+                ? 'bg-primary text-primary-content shadow-lg shadow-primary/25 hover:shadow-primary/40 active:scale-[0.98]'
+                : 'bg-surface-dark border border-white/10 text-slate-400'
+                }`}
+            >
+              {loading ? 'Salvando...' : 'Salvar Dados'}
+              {!loading && <span className="material-symbols-outlined text-xl">save</span>}
+            </button>
+          </div>
         </form>
       </main>
-
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background-dark via-background-dark to-transparent z-10 w-full max-w-md mx-auto">
-        <button
-          onClick={handleSave}
-          disabled={loading || !isFormValid()}
-          className={`w-full font-bold text-lg rounded-full py-4 flex items-center justify-center gap-2 transition-all ${isFormValid() && !loading
-            ? 'bg-primary text-primary-content shadow-lg shadow-primary/25 hover:shadow-primary/40 active:scale-[0.98]'
-            : 'bg-surface-dark text-slate-500 border border-white/10 cursor-not-allowed opacity-60'
-            }`}
-        >
-          {loading ? 'Salvando...' : 'Salvar Dados'}
-          {!loading && isFormValid() && <span className="material-symbols-outlined text-xl">save</span>}
-        </button>
-      </div>
     </div>
   );
 };

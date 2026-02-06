@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 import { dataService, LegacyGameEvent } from '../services/dataService';
 import { authService } from '../services/authService';
+import { supabase } from '../services/supabase';
 
 const DashboardScreen = () => {
-  const { role, name, avatar, logout, teamId, status, teamDetails, intendedRole, isFirstManager } = useUser();
+  const { role, name, avatar, logout, teamId, isApproved, teamDetails, intendedRole, isFirstManager, unreadCount, fetchNotifications } = useUser();
 
   const isManager = role === 'presidente' || role === 'vice-presidente' || intendedRole === 'presidente' || intendedRole === 'vice-presidente';
-  const isApproved = status === 'approved' || isManager; // Presidents/VPs are effectively approved
+  const isUserApproved = isApproved || isManager; // Presidentes/Vices são considerados aprovados automaticamente
 
   const isPlayer = role === 'player' && !isManager;
   const isAdmin = role === 'admin' || isManager;
@@ -21,19 +22,33 @@ const DashboardScreen = () => {
     window.location.reload();
   };
 
-  // Async Data
+  // Dados Assíncronos
   const [loading, setLoading] = useState(true);
   const [nextGame, setNextGame] = useState<LegacyGameEvent | null>(null);
   const [balance, setBalance] = useState(0);
   const [monthlyDiff, setMonthlyDiff] = useState(0);
   const [nextBirthday, setNextBirthday] = useState<{ name: string, date: Date, avatar: string } | null>(null);
+  const [pendingActionCount, setPendingActionCount] = useState(0);
 
   useEffect(() => {
+    fetchNotifications(); // Busca notificações ao carregar o dashboard
+
     const loadDashboardData = async () => {
       setLoading(true);
       try {
         const events = await dataService.events.list();
-        const futureEvents = events.filter(e => new Date(e.date + 'T' + e.time) > new Date());
+
+        // Normalize comparison date to start of current day to include events later today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const futureEvents = events
+          .filter(e => {
+            const eventDate = new Date(e.date + 'T00:00:00');
+            return eventDate >= today;
+          })
+          .sort((a, b) => new Date(a.date + 'T' + a.time).getTime() - new Date(b.date + 'T' + b.time).getTime());
+
         if (futureEvents.length > 0) {
           setNextGame(futureEvents[0]);
         }
@@ -69,6 +84,25 @@ const DashboardScreen = () => {
         if (upcomingBirthdays.length > 0) {
           setNextBirthday(upcomingBirthdays[0]);
         }
+
+        // Busca ações pendentes para administradores
+        if (isAdmin && isApproved) {
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            const [requests, transactions] = await Promise.all([
+              dataService.team.getPendingRequests(),
+              dataService.finance.list()
+            ]);
+
+            // Filtra solicitações excluindo o próprio usuário (não pode se auto-aprovar)
+            const otherPendingRequests = requests.filter(r => r.id !== user?.id).length;
+            const pendingPayments = transactions.filter(t => t.status === 'pending').length;
+
+            setPendingActionCount(otherPendingRequests + pendingPayments);
+          } catch (e) {
+            console.error("Error fetching pending actions:", e);
+          }
+        }
       } catch (err) {
         console.error("Failed to load dashboard data", err);
       } finally {
@@ -79,7 +113,7 @@ const DashboardScreen = () => {
     if (teamId) {
       loadDashboardData();
     }
-  }, [isPlayer, teamId]);
+  }, [isPlayer, teamId, fetchNotifications]);
 
 
   const openMap = (e: React.MouseEvent, location: string) => {
@@ -91,14 +125,22 @@ const DashboardScreen = () => {
   const userAvatarStyle = avatar ? `url('${avatar}')` : defaultAvatar;
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    // Add time component to prevent timezone shift when parsing YYYY-MM-DD
+    const date = new Date(dateStr + 'T12:00:00');
     return date.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
   };
 
   const getDaysUntil = (dateStr: string) => {
-    const diff = new Date(dateStr).getTime() - new Date().getTime();
+    const eventDate = new Date(dateStr + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const diff = eventDate.getTime() - today.getTime();
     const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-    return days === 0 ? 'Hoje' : `Faltam ${days} ${days === 1 ? 'dia' : 'dias'}`;
+
+    if (days === 0) return 'Hoje';
+    if (days < 0) return 'Concluído';
+    return `Faltam ${days} ${days === 1 ? 'dia' : 'dias'}`;
   };
 
   return (
@@ -113,9 +155,14 @@ const DashboardScreen = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button className="relative flex items-center justify-center size-10 rounded-full bg-white/5 text-white hover:bg-white/10 transition-colors">
+          <button
+            onClick={() => navigate('/notifications')}
+            className="relative flex items-center justify-center size-10 rounded-full bg-white/5 text-white hover:bg-white/10 transition-colors"
+          >
             <span className="material-symbols-outlined">notifications</span>
-            <span className="absolute top-2 right-2.5 size-2 bg-primary rounded-full ring-2 ring-background-dark"></span>
+            {unreadCount > 0 && (
+              <span className="absolute top-2 right-2.5 size-2 bg-primary rounded-full ring-2 ring-background-dark animate-pulse"></span>
+            )}
           </button>
           <button
             onClick={() => navigate('/settings')}
@@ -190,7 +237,7 @@ const DashboardScreen = () => {
           </section>
         )}
 
-        {isAdmin && (
+        {isAdmin && pendingActionCount > 0 && (
           <section className="px-4">
             <div
               onClick={() => navigate('/finance')}
@@ -250,7 +297,7 @@ const DashboardScreen = () => {
               <div className="size-16 rounded-full bg-surface-dark border border-white/10 flex items-center justify-center text-white group-active:scale-95 transition-all hover:bg-white/10 hover:border-primary/50">
                 <span className="material-symbols-outlined text-3xl text-primary">military_tech</span>
               </div>
-              <span className="text-xs font-medium text-slate-300 text-center leading-tight">AmaPlay<br />Pro</span>
+              <span className="text-xs font-medium text-slate-300 text-center leading-tight">AmaFut<br />Pro</span>
             </button>
 
             <button
@@ -271,6 +318,16 @@ const DashboardScreen = () => {
                 <span className="material-symbols-outlined text-3xl">query_stats</span>
               </div>
               <span className="text-xs font-medium text-slate-300 text-center leading-tight">Estatísticas<br />Jogadores</span>
+            </button>
+
+            <button
+              onClick={() => navigate('/scoring')}
+              className="flex flex-col items-center gap-3 group"
+            >
+              <div className="size-16 rounded-full bg-surface-dark border border-white/10 flex items-center justify-center text-white group-active:scale-95 transition-all hover:bg-white/10 hover:border-yellow-500/50">
+                <span className="material-symbols-outlined text-3xl text-yellow-500">stars</span>
+              </div>
+              <span className="text-xs font-medium text-slate-300 text-center leading-tight">Scoring</span>
             </button>
 
             {role === 'presidente' && (
@@ -343,8 +400,10 @@ const DashboardScreen = () => {
                   <span className="material-symbols-outlined text-sm text-primary filled">timer</span>
                   {getDaysUntil(nextGame.date)}
                 </div>
-                <div className="absolute bottom-4 left-5 w-full pr-10">
-                  <p className="text-primary text-xs font-bold tracking-wider mb-1 uppercase">AmaPlay</p>
+                <div className="absolute bottom-4 left-5 w-full pr-10 text-pretty">
+                  <p className="text-primary text-xs font-bold tracking-wider mb-1 uppercase drop-shadow-md">
+                    {teamDetails?.name || 'Meu Time'}
+                  </p>
                   <h4 className="text-2xl font-bold text-white leading-none">
                     {nextGame.type === 'game' ? `vs. ${nextGame.opponent || 'Adversário'}` : nextGame.title}
                   </h4>

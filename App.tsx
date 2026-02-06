@@ -19,7 +19,9 @@ import TeamStatsScreen from './screens/TeamStatsScreen';
 import PlayerPaymentsScreen from './screens/PlayerPaymentsScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import NotificationsScreen from './screens/NotificationsScreen';
 import PendingApprovalScreen from './screens/PendingApprovalScreen';
+import ScoringScreen from './screens/ScoringScreen';
 import { UserProvider, useUser } from './contexts/UserContext';
 import { useAuthRedirect } from './hooks/useAuthRedirect';
 
@@ -166,14 +168,34 @@ const App = () => {
             <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
             <Route path="/reset-password" element={<ResetPasswordScreen />} />
 
-            {/* Onboarding Flow */}
-            <Route path="/register-role" element={<RegisterRoleScreen />} />
-            <Route path="/register-team" element={<RegisterTeamScreen />} />
-            <Route path="/register-privacy" element={<RegisterPrivacyScreen />} />
-            <Route path="/register-profile" element={<RegisterProfileScreen />} />
+            {/* Onboarding Flow - Requires Authentication */}
+            <Route path="/register-role" element={
+              <PrivateRoute>
+                <RegisterRoleScreen />
+              </PrivateRoute>
+            } />
+            <Route path="/register-team" element={
+              <PrivateRoute>
+                <RegisterTeamScreen />
+              </PrivateRoute>
+            } />
+            <Route path="/register-privacy" element={
+              <PrivateRoute>
+                <RegisterPrivacyScreen />
+              </PrivateRoute>
+            } />
+            <Route path="/register-profile" element={
+              <PrivateRoute>
+                <RegisterProfileScreen />
+              </PrivateRoute>
+            } />
 
             {/* Application Routes */}
-            <Route path="/scouts" element={<ScoutsScreen />} />
+            <Route path="/scouts" element={
+              <PrivateRoute>
+                <ScoutsScreen />
+              </PrivateRoute>
+            } />
 
             <Route path="/pro-selection" element={
               <ProtectedRoute restrictedTo={['presidente', 'vice-presidente', 'admin', 'player']}>
@@ -217,7 +239,11 @@ const App = () => {
               </ProtectedRoute>
             } />
 
-            <Route path="/player-stats" element={<PlayerStatsScreen />} />
+            <Route path="/player-stats" element={
+              <PrivateRoute>
+                <PlayerStatsScreen />
+              </PrivateRoute>
+            } />
 
             <Route path="/team-stats" element={
               <ProtectedRoute restrictedTo={['presidente', 'vice-presidente', 'admin', 'player']}>
@@ -225,9 +251,28 @@ const App = () => {
               </ProtectedRoute>
             } />
 
-            <Route path="/player-payments" element={<PlayerPaymentsScreen />} />
+            <Route path="/scoring" element={
+              <ProtectedRoute restrictedTo={['presidente', 'vice-presidente', 'admin', 'player']}>
+                <ScoringScreen />
+              </ProtectedRoute>
+            } />
 
-            <Route path="/settings" element={<SettingsScreen />} />
+            <Route path="/player-payments" element={
+              <PrivateRoute>
+                <PlayerPaymentsScreen />
+              </PrivateRoute>
+            } />
+
+            <Route path="/settings" element={
+              <PrivateRoute>
+                <SettingsScreen />
+              </PrivateRoute>
+            } />
+            <Route path="/notifications" element={
+              <PrivateRoute>
+                <NotificationsScreen />
+              </PrivateRoute>
+            } />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

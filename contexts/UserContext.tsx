@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authService } from '../services/authService';
 import { supabase, Profile } from '../services/supabase';
 
@@ -9,6 +9,17 @@ interface TeamDetails {
   primaryColor: string;
   secondaryColor: string;
   logo: string | null;
+}
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  type: 'promotion_invite' | 'general_alert';
+  title: string;
+  message: string;
+  data: any;
+  status: 'pending' | 'accepted' | 'rejected' | 'read';
+  created_at: string;
 }
 
 interface UserContextType {
@@ -50,6 +61,7 @@ interface UserContextType {
   loginWithGoogle: () => Promise<void>;
   loginWithApple: () => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
 
   // Team Management
@@ -60,6 +72,13 @@ interface UserContextType {
   rejectMember: (memberId: string) => Promise<boolean>;
   removeMember: (memberId: string) => Promise<boolean>;
 
+  // Promotions & Notifications
+  notifications: Notification[];
+  unreadCount: number;
+  fetchNotifications: () => Promise<void>;
+  promoteMember: (targetUserId: string, newRole: Role) => Promise<void>;
+  respondToPromotion: (notificationId: string, accept: boolean) => Promise<void>;
+
   // Status
   isLoading: boolean;
   isInitialized: boolean;
@@ -69,6 +88,8 @@ interface UserContextType {
   setIntendedRole: (role: Role) => Promise<void>;
   heartTeam: string | null;
   position: 'GOL' | 'ZAG' | 'MEI' | 'ATA' | null;
+  isApproved: boolean; // Agora booleano
+  isPro: boolean;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -90,7 +111,8 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     logo: null
   });
   const [isSetupComplete, setIsSetupComplete] = useState(false);
-  const [status, setStatusState] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [isApproved, setIsApprovedState] = useState(false);
+  const [isPro, setIsProState] = useState(false);
   const [isFirstManager, setIsFirstManager] = useState(false);
   const [stats, setStatsState] = useState({
     pace: 50, shooting: 50, passing: 50, dribbling: 50, defending: 50, physical: 50
@@ -98,28 +120,48 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [ovr, setOvrState] = useState(50);
   const [heartTeam, setHeartTeamState] = useState<string | null>(null);
   const [position, setPositionState] = useState<'GOL' | 'ZAG' | 'MEI' | 'ATA' | null>(null);
-
-  // Auth states
+  const [status, setStatus] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Helper logic to apply profile data to various states efficiently
+  // Lógica auxiliar para aplicar dados do perfil em vários estados de forma eficiente
   const applyUserData = (userData: any) => {
     if (!userData) return;
 
     setUserId(userData.id || userData.userId || null);
     setEmail(userData.email || '');
     setNameState(userData.name || userData.full_name || 'Visitante');
-    setRoleState(userData.role || null);
+
+    // 🛡️ SEGURANÇA: Ignorar o papel padrão "authenticated" do Supabase Auth
+    // Queremos apenas os papéis personalizados da nossa tabela 'profiles'.
+    if (userData.is_first_manager) {
+      setRoleState('presidente');
+    } else if (userData.role && userData.role !== 'authenticated') {
+      setRoleState(userData.role);
+    }
+
     setAvatarState(userData.avatar || null);
     setCardAvatarState(userData.card_avatar || null);
-    setTeamIdState(userData.team_id || null);
-    setIsSetupComplete(!!userData.is_setup_complete);
-    setStatusState(userData.status || 'pending');
+    // 🛡️ SEGURANÇA: Garante que team_id seja aplicado INDEPENDENTE de detalhes do time
+    const dbTeamId = userData.team_id || userData.teamId || null;
+    setTeamIdState(dbTeamId);
+
+    // Prioridade máxima para a flag do banco
+    const dbIsSetupComplete = !!userData.is_setup_complete;
+    setIsSetupComplete(dbIsSetupComplete);
+
+    setIsApprovedState(!!userData.is_approved);
+    setIsProState(!!userData.is_pro);
     setIsFirstManager(!!userData.is_first_manager);
 
-    if (userData.intended_role) setIntendedRoleState(userData.intended_role as Role);
+    // Status para compatibilidade com telas de aguardando aprovação
+    const currentStatus = userData.status || (userData.is_approved ? 'approved' : 'pending');
+    setStatus(currentStatus as any);
+
+    if (userData.intended_role && userData.intended_role !== 'authenticated') {
+      setIntendedRoleState(userData.intended_role as Role);
+    }
     if (userData.stats) setStatsState(userData.stats);
     if (userData.ovr) setOvrState(userData.ovr);
     if (userData.heart_team) setHeartTeamState(userData.heart_team);
@@ -127,7 +169,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
     const rawTeamDetails = userData.teamDetails;
     if (rawTeamDetails) {
-      // Handle both object and array from Supabase join
+      // Lida com objeto ou array vindo do join do Supabase
       const details = Array.isArray(rawTeamDetails) ? rawTeamDetails[0] : rawTeamDetails;
       if (details) {
         setTeamDetailsState({
@@ -137,80 +179,70 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
           logo: details.logo || null
         });
       }
+    } else if (dbTeamId) {
+      // Caso crítico: Tem ID mas não veio detalhes (join falhou ou não feito)
+      // Vamos tentar manter o estado limpo ou buscar depois, mas o ID já está setado.
+      console.warn('⚠️ UserContext: team_id existe mas teamDetails veio vazio. O ID foi preservado.');
     }
   };
 
-  // Initialize from Supabase session
+  const isProcessingRef = React.useRef(false);
+  const lastSessionId = React.useRef<string | null>(null);
+
+  // Inicializa a partir da sessão do Supabase
   useEffect(() => {
     let mounted = true;
-    let loadingRef = false;
 
-    const initializeAuth = async () => {
-      if (loadingRef) return;
-      loadingRef = true;
-
-      try {
-        const session = await authService.getSession();
-        if (session?.user && mounted) {
-          const fullProfile = await authService.getFullProfile(session.user.id);
-          if (fullProfile && mounted) {
-            applyUserData(fullProfile);
-          } else if (mounted) {
-            setUserId(session.user.id);
-            setEmail(session.user.email || '');
-            if (session.user.user_metadata?.name) {
-              setNameState(session.user.user_metadata.name);
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Error initializing auth:', err);
-      } finally {
-        if (mounted) {
-          setIsInitialized(true);
-          loadingRef = false;
-        }
-      }
-    };
-
-    initializeAuth();
-
-    // Listen for auth state changes
+    // Escuta mudanças no estado de autenticação (Login, Logout, User Updated)
     const { data: { subscription } } = authService.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
       if (event === 'SIGNED_OUT') {
         resetState();
         setIsInitialized(true);
+        lastSessionId.current = null;
         return;
       }
 
-      if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
-        // Prevent re-fetching if we are already loading or if we already have data
-        // But if it's a new SIGNED_IN event, we should probably verify
-        if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || (!userId && !loadingRef)) {
-          // If we don't have user data yet, ensure we show the loader
-          if (!userId || event === 'SIGNED_IN') {
+      const currentSessionId = session?.user?.id || null;
+
+      if (session?.user) {
+        // Checking for session change using Ref to avoid stale closure issues
+        const sessionChanged = currentSessionId !== lastSessionId.current;
+        const needsProfile = lastSessionId.current === null;
+
+        if (sessionChanged || needsProfile || event === 'USER_UPDATED') {
+          // IMPORTANT: Only set isInitialized(false) if we truly have no data 
+          // to avoid "hanging" or "flashing" the loader on tab switches.
+          // If we already have a session recorded and it's the same, don't show the global loader.
+          if (needsProfile || sessionChanged) {
             setIsInitialized(false);
           }
 
-          loadingRef = true;
+          // Prevent duplicate requests
+          if (isProcessingRef.current) return;
+          isProcessingRef.current = true;
+
           try {
             const fullProfile = await authService.getFullProfile(session.user.id);
             if (fullProfile && mounted) {
               applyUserData(fullProfile);
+              lastSessionId.current = currentSessionId;
             }
           } catch (err) {
-            console.error('Error fetching profile on auth change:', err);
+            console.error('Erro ao buscar perfil na mudança de auth:', err);
           } finally {
             if (mounted) {
-              loadingRef = false;
               setIsInitialized(true);
+              isProcessingRef.current = false;
             }
           }
         } else {
+          // If session hasn't changed and we already have it, just make sure we are initialized
           setIsInitialized(true);
         }
+      } else {
+        setIsInitialized(true);
       }
     });
 
@@ -218,7 +250,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []); // Only once
+  }, []); // Executa apenas uma vez na montagem
 
 
   const resetState = () => {
@@ -236,27 +268,30 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       logo: null
     });
     setIsSetupComplete(false);
-    setStatusState('pending');
+    setIsSetupComplete(false);
+    setIsApprovedState(false);
+    setIsProState(false);
     setIsFirstManager(false);
     setHeartTeamState(null);
     setPositionState(null);
+    setError(null);
   };
 
   const setRole = async (newRole: Role) => {
-    // By request: everyone starts as player in role column to avoid blocks, 
-    // but we save their intended role.
+    // Por solicitação: todos começam como 'player' na coluna role para evitar bloqueios de RLS,
+    // mas salvamos o papel pretendido (intended_role) para o fluxo de aprovação.
     setIntendedRoleState(newRole);
 
     if (userId) {
       try {
         await authService.updateProfile({ intended_role: newRole });
       } catch (err) {
-        console.error('Error updating intended role:', err);
+        console.error('Erro ao atualizar papel pretendido:', err);
       }
     }
   };
 
-  const setIntendedRole = setRole; // Map both for clarity
+  const setIntendedRole = setRole; // Mapeia ambos para clareza no uso
 
   const setName = async (newName: string) => {
     setNameState(newName);
@@ -355,9 +390,15 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     setError(null);
 
     try {
-      const user = await authService.login(emailInput, pass);
-      applyUserData(user);
-      return user;
+      const userRaw = await authService.login(emailInput, pass);
+      // 🛡️ FIX: Busca o perfil completo (com team_id) antes de atualizar o estado
+      // Evita sobrescrever teamId com null por usar apenas o objeto de Auth
+      const fullProfile = await authService.getFullProfile(userRaw.id);
+      if (fullProfile) {
+        applyUserData(fullProfile);
+        return fullProfile;
+      }
+      return userRaw;
     } catch (err: any) {
       const message = err.message || 'Erro ao fazer login';
       setError(message);
@@ -372,9 +413,18 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     setError(null);
 
     try {
-      const user = await authService.register(emailInput, pass, nameInput);
-      applyUserData(user);
-      return user;
+      // Register já retorna o perfil construído manualmente no authService
+      // mas vamos garantir buscando o fullProfile para consistência e incluir teamDetails se houver
+      const userRaw = await authService.register(emailInput, pass, nameInput);
+
+      const fullProfile = await authService.getFullProfile(userRaw.id);
+      if (fullProfile) {
+        applyUserData(fullProfile);
+        return fullProfile;
+      }
+
+      applyUserData(userRaw);
+      return userRaw;
     } catch (err: any) {
       const message = err.message || 'Erro ao criar conta';
       setError(message);
@@ -427,6 +477,25 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const deleteAccount = async () => {
+    setIsLoading(true);
+    setError(null); // Limpa erros anteriores
+    try {
+      const { error: rpcError } = await supabase.rpc('delete_own_account');
+      if (rpcError) throw rpcError;
+
+      await authService.logout();
+      resetState();
+    } catch (err: any) {
+      console.error('Erro ao excluir conta:', err);
+      const message = err.message || 'Erro ao excluir conta';
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const resetPassword = async (emailInput: string) => {
     setIsLoading(true);
     setError(null);
@@ -445,11 +514,12 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const createTeam = async (details: TeamDetails): Promise<string> => {
     if (!userId) throw new Error('Usuário não autenticado');
 
-    // Autenticação de função: Apenas Presidente e Vice podem criar times
-    // Check both current role and intendedRole (for new users)
-    const effectiveRole = role !== 'player' ? role : intendedRole;
+    // Autenticação de função: Se criar time, assume cargo de gestão
+    let effectiveRole = (role && role !== 'player' && role !== 'authenticated') ? role : intendedRole;
+
+    // Se não for pres/vice, promove automaticamente para Presidente ao criar time
     if (effectiveRole !== 'presidente' && effectiveRole !== 'vice-presidente') {
-      throw new Error('Apenas Presidentes ou Vice-Presidentes podem criar um novo time.');
+      effectiveRole = 'presidente';
     }
 
 
@@ -457,6 +527,22 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     setError(null);
 
     try {
+      // 🛡️ GARANTIA DE INTEGRIDADE: Força a criação do perfil antes do time
+      const { error: upsertError } = await supabase.from('profiles').upsert({
+        id: userId,
+        email: email,
+        name: name || 'Presidente',
+        role: effectiveRole,
+        intended_role: effectiveRole,
+        is_approved: true,
+        is_setup_complete: false
+      }, { onConflict: 'id' });
+
+      if (upsertError) {
+        console.error('Erro ao garantir perfil:', upsertError);
+        throw new Error(`Não foi possível validar seu perfil de gestor: ${upsertError.message}`);
+      }
+
       const { data, error: teamError } = await supabase
         .from('teams')
         .insert({
@@ -478,28 +564,30 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
       // 🔑 FLOWCHART: Criar time = Auto-Aprova Pres/Vice
       // MAS ainda não marca setup_complete (falta Privacidade + Perfil)
-      setStatusState('approved');
+      setIsApprovedState(true);
       setIsFirstManager(true);
       setRoleState(effectiveRole);
+      setStatus('approved');
 
       await authService.updateProfile({
+        is_approved: true,
         status: 'approved',
         is_first_manager: true,
         role: effectiveRole,
         team_id: data.id,
-        is_setup_complete: false // ❌ NÃO completar setup ainda
+        is_setup_complete: true
       });
 
       // Mark that team now has a first manager
       await supabase.from('teams').update({ has_first_manager: true }).eq('id', data.id);
 
-      // 🔑 Popula tabela team_members
-      await supabase.from('team_members').insert({
+      // 🔑 Popula tabela team_members, evitando duplicações
+      await supabase.from('team_members').upsert({
         team_id: data.id,
         profile_id: userId,
         role: effectiveRole,
-        status: 'approved'
-      });
+        is_team_approved: true
+      }, { onConflict: 'team_id,profile_id' });
 
 
       return data.id;
@@ -518,45 +606,59 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     setIsLoading(true);
     setError(null);
     try {
-      const effectiveRole = role !== 'player' ? role : intendedRole;
+      const effectiveRole = (role && role !== 'player') ? role : intendedRole;
 
-      // Check if team already has a manager
-      const { data: teamCheck } = await supabase
-        .from('teams')
-        .select('has_first_manager')
-        .eq('id', id)
-        .single();
+      // Check if team has any approved members
+      const { count: approvedCount, error: countError } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('team_id', id)
+        .eq('is_approved', true);
 
+      if (countError) console.error('Error checking team members:', countError);
+
+      // 🔑 CRITICAL: Se o time não tem ninguém aprovado, vira Presidente independente da intenção
+      const isAbandoned = approvedCount === 0;
       const isManagerCandidate = (effectiveRole === 'presidente' || effectiveRole === 'vice-presidente');
-      const shouldBecomeFirstManager = isManagerCandidate && !teamCheck?.has_first_manager;
+      const shouldBecomeFirstManager = isManagerCandidate || isAbandoned;
 
       // 🔑 FLOWCHART: Buscar Time
-      // - Se virou 1º gestor: aprovado
-      // - Se Admin/Jogador: status = pending
+      // - Se virou 1° gestor ou time está abandonado: aprovado como Presidente
+      // - Se Admin/Jogador em time ativo: status = pending
+      const newRole = shouldBecomeFirstManager ? (isAbandoned ? 'presidente' : effectiveRole) : 'player';
       const newStatus = shouldBecomeFirstManager ? 'approved' : 'pending';
-      const newIsFirstManager = shouldBecomeFirstManager;
-      const newRole = shouldBecomeFirstManager ? effectiveRole : 'player';
 
       await authService.updateProfile({
         team_id: id,
-        status: newStatus,
-        is_first_manager: newIsFirstManager,
+        is_approved: shouldBecomeFirstManager,
+        status: newStatus as any,
+        is_first_manager: shouldBecomeFirstManager,
         role: newRole,
         intended_role: effectiveRole,
-        is_setup_complete: false // ❌ NÃO completar setup ainda (falta Privacidade + Perfil)
+        is_setup_complete: false
       });
 
-      if (shouldBecomeFirstManager) {
-        await supabase.from('teams').update({ has_first_manager: true }).eq('id', id);
+      // Recarrega o perfil para garantir que pegamos as decisões do banco (triggers)
+      const fullProfile = await authService.getFullProfile(userId);
+      if (fullProfile) {
+        applyUserData(fullProfile);
       }
 
-      // 🔑 Popula tabela team_members 
+      // 🔑 Popula ou atualiza a tabela team_members 
+      // Usamos os dados do perfil recarregado
+      const finalRole = fullProfile?.role || newRole;
+      const finalIsApproved = fullProfile?.is_approved || shouldBecomeFirstManager;
+
       await supabase.from('team_members').upsert({
         team_id: id,
         profile_id: userId,
-        role: newRole,
-        status: newStatus
+        role: finalRole as any,
+        is_team_approved: finalIsApproved
       }, { onConflict: 'team_id,profile_id' });
+
+      if (finalIsApproved) {
+        await supabase.from('teams').update({ has_first_manager: true }).eq('id', id);
+      }
 
 
       // Fetch team details to update state
@@ -578,9 +680,10 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       setTeamIdState(id);
-      setStatusState(newStatus);
-      setIsFirstManager(newIsFirstManager);
+      setIsApprovedState(shouldBecomeFirstManager);
+      setIsFirstManager(shouldBecomeFirstManager);
       setRoleState(newRole);
+      setStatus(newStatus as any);
 
     } catch (err: any) {
       setError(err.message || 'Erro ao solicitar entrada no time');
@@ -667,7 +770,9 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         .eq('id', memberId)
         .single();
 
-      const finalRole = memberData?.intended_role || memberData?.role || 'player';
+      const intended = memberData?.intended_role;
+      // 🛡️ SECURITY: Prevent 'authenticated' role from leaking
+      const finalRole = (intended && intended !== 'authenticated') ? (intended as Role) : (memberData?.role || 'player');
       const mTeamId = memberData?.team_id;
 
       // Enforce "Only One" rule during approval if they intended to be Pres/VP
@@ -678,6 +783,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
           .eq('team_id', teamId)
           .eq('role', finalRole)
           .eq('status', 'approved')
+          .neq('id', memberId) // Don't count the member themselves if they are already approved (though they shouldn't be)
           .limit(1);
 
         if (existing && existing.length > 0) {
@@ -686,18 +792,20 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
 
-      // 1. Update status to approved and set their role to what they intended in Profiles
+      // 1. Atualiza aprovação e define o cargo pretendido no Perfil
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
+          is_approved: true,
           status: 'approved',
-          role: finalRole
+          role: finalRole,
+          intended_role: null // 🧹 Limpa cargo pretendido pois já foi aprovado
         })
         .eq('id', memberId);
 
       if (profileError) throw profileError;
 
-      // 2. Update team_members record
+      // 2. Sincronização com a tabela team_members - atualizando cargo e aprovação
       if (mTeamId) {
         await supabase
           .from('team_members')
@@ -705,7 +813,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
             team_id: mTeamId,
             profile_id: memberId,
             role: finalRole,
-            status: 'approved'
+            is_team_approved: true
           }, { onConflict: 'team_id,profile_id' });
       }
 
@@ -757,7 +865,10 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         .from('profiles')
         .update({
           team_id: null,
-          status: 'pending'
+          status: 'pending', // Volta para o limbo de busca de time
+          is_approved: false,
+          role: 'player', // Volta a ser jogador comum
+          intended_role: null
         })
         .eq('id', memberId);
 
@@ -804,7 +915,9 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         .from('profiles')
         .update({
           team_id: null,
-          status: 'rejected'
+          status: 'rejected',
+          is_approved: false,
+          intended_role: null // Limpa o cargo pretendido ao rejeitar
         })
         .eq('id', memberId);
 
@@ -846,6 +959,96 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  // --- NOTIFICATIONS & PROMOTION LOGIC ---
+
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchNotifications = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setNotifications(data || []);
+      setUnreadCount(data?.filter(n => n.status === 'pending' || n.status === 'read').length || 0); // Simplified count
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    }
+  }, [userId]);
+
+  const promoteMember = async (targetUserId: string, newRole: Role) => {
+    if (!userId || !teamId) return;
+
+    // Apenas Presidente/Vice podem promover
+    if (role !== 'presidente' && role !== 'vice-presidente') {
+      throw new Error('Permissão insuficiente para promover membros.');
+    }
+
+    try {
+      // Cria notificação para o usuário alvo
+      const { error } = await supabase.from('notifications').insert({
+        user_id: targetUserId,
+        type: 'promotion_invite',
+        title: 'Você recebeu uma promoção!',
+        message: `Você foi convidado para assumir o cargo de ${newRole?.toUpperCase()}. Aceita o desafio?`,
+        data: { new_role: newRole, promoter_name: name, team_id: teamId },
+        status: 'pending'
+      });
+
+      if (error) throw error;
+      // Não atualiza role diretamente - espera aceite
+    } catch (err: any) {
+      console.error('Error prompting promotion:', err);
+      throw new Error(err.message || 'Erro ao enviar convite de promoção');
+    }
+  };
+
+  const respondToPromotion = async (notificationId: string, accept: boolean) => {
+    try {
+      if (!accept) {
+        // Apenas rejeita
+        await supabase
+          .from('notifications')
+          .update({ status: 'rejected' })
+          .eq('id', notificationId);
+
+        // Atualiza estado local
+        setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, status: 'rejected' } : n));
+        return;
+      }
+
+      // Se aceitar, chama a RPC segura
+      const { data, error } = await supabase.rpc('confirm_promotion', {
+        notification_id: notificationId
+      });
+
+      if (error) throw error;
+
+      if (data && data.success) {
+        // Atualiza estado local se for o próprio usuário (deve ser)
+        setRoleState(data.new_role as Role);
+        setIntendedRoleState(data.new_role as Role);
+
+        // Atualiza notificações locais
+        setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, status: 'accepted' } : n));
+
+        // Se virou presidente/vice, pode precisar recarregar infos do time ou membros, 
+        // mas o RLS deve se ajustar automaticamente na próxima query
+      } else {
+        throw new Error(data?.error || 'Erro desconhecido ao processar promoção');
+      }
+
+    } catch (err: any) {
+      console.error('Error responding to promotion:', err);
+      throw new Error(err.message || 'Erro ao processar resposta');
+    }
+  };
+
   const value: UserContextType = React.useMemo(() => ({
     userId,
     role,
@@ -868,6 +1071,8 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     markSetupComplete,
     status,
     isFirstManager,
+    isApproved, // Added missing export
+    isPro,
     login,
     register,
     loginWithGoogle,
@@ -880,6 +1085,12 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     approveMember,
     rejectMember,
     removeMember,
+    notifications,
+    unreadCount,
+    fetchNotifications,
+    promoteMember,
+    respondToPromotion,
+    deleteAccount,
     intendedRole,
     setIntendedRole,
     heartTeam,
@@ -890,7 +1101,8 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     clearError
   }), [
     userId, role, name, email, avatar, cardAvatar, stats, ovr, teamDetails, teamId,
-    isSetupComplete, status, isFirstManager, intendedRole, heartTeam, position, isLoading, isInitialized, error
+    isSetupComplete, status, isFirstManager, isApproved, isPro, intendedRole, heartTeam, position, isLoading, isInitialized, error,
+    notifications, unreadCount
   ]);
 
 

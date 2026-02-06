@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../services/supabase';
 import { removeBackground } from '@imgly/background-removal';
+import { ImageEditor } from '../components/ImageEditor';
 
 const COLORS = [
   { hex: '#13ec5b', name: 'Verde Neon' },
@@ -28,13 +29,13 @@ const RegisterTeamScreen = () => {
   const [mode, setMode] = useState<'create' | 'join' | 'select' | 'confirm' | null>(null);
 
   // Detect if user already has a team (Pres/VP case)
+  // Detect if user already has a team (Pres/VP case)
   React.useEffect(() => {
-    if (teamId && teamDetails.name && (intendedRole === 'presidente' || intendedRole === 'vice-presidente')) {
+    // 🛡️ HARDENED LOGIC: Se tem teamId e é gestor, vai para confirmação
+    if (teamId && (intendedRole === 'presidente' || intendedRole === 'vice-presidente')) {
       setMode('confirm');
-    } else if (intendedRole && (intendedRole === 'admin' || intendedRole === 'player')) {
-      setMode('join');
     }
-  }, [teamId, teamDetails.name, intendedRole]);
+  }, [teamId, intendedRole]);
   const [searchTerm, setSearchTerm] = useState('');
   const [foundTeams, setFoundTeams] = useState<any[]>([]);
   const [recentTeams, setRecentTeams] = useState<any[]>([]);
@@ -70,12 +71,8 @@ const RegisterTeamScreen = () => {
   const [logo, setLogo] = useState<string | null>(teamDetails.logo);
 
   // Logo Editor State
-  const [isEditingLogo, setIsEditingLogo] = useState(false);
+  const [showImageEditor, setShowImageEditor] = useState(false);
   const [rawLogo, setRawLogo] = useState<string | null>(null);
-  const [imgScale, setImgScale] = useState(1);
-  const [imgPosX, setImgPosX] = useState(0);
-  const [imgPosY, setImgPosY] = useState(0);
-  const [isProcessingBg, setIsProcessingBg] = useState(false);
 
   // Color Picker Modal State
   const [showColorPicker, setShowColorPicker] = useState<'primary' | 'secondary' | null>(null);
@@ -88,10 +85,7 @@ const RegisterTeamScreen = () => {
       const reader = new FileReader();
       reader.onloadend = () => {
         setRawLogo(reader.result as string);
-        setImgScale(1);
-        setImgPosX(0);
-        setImgPosY(0);
-        setIsEditingLogo(true);
+        setShowImageEditor(true);
       };
       reader.readAsDataURL(file);
     }
@@ -99,56 +93,9 @@ const RegisterTeamScreen = () => {
     event.target.value = '';
   };
 
-  const handleRemoveBg = async () => {
-    if (!rawLogo) return;
-    setIsProcessingBg(true);
-    try {
-      const blob = await removeBackground(rawLogo);
-      const url = URL.createObjectURL(blob);
-      setRawLogo(url);
-    } catch (e) {
-      console.error("BG removal failed", e);
-      alert("Erro ao remover fundo. Tente outra imagem.");
-    } finally {
-      setIsProcessingBg(false);
-    }
-  };
-
-  const handleSaveLogo = async () => {
-    if (!rawLogo) return;
-
-    // Create a canvas to crop/transform the image
-    const canvas = document.createElement('canvas');
-    const size = 300; // Final resolution
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-
-    if (ctx) {
-      const img = new Image();
-      img.crossOrigin = "Anonymous";
-      img.src = rawLogo;
-      await new Promise((resolve) => { img.onload = resolve; });
-
-      // Fill background if needed (optional, keeping transparent for now)
-      ctx.clearRect(0, 0, size, size);
-
-      // Calculate transformation
-      // Center of canvas
-      const cx = size / 2;
-      const cy = size / 2;
-
-      ctx.translate(cx, cy);
-      ctx.translate(imgPosX, imgPosY); // Pan
-      ctx.scale(imgScale, imgScale);   // Zoom
-
-      // Draw image centered
-      ctx.drawImage(img, -img.width / 2, -img.height / 2);
-
-      const finalUrl = canvas.toDataURL('image/png');
-      setLogo(finalUrl);
-      setIsEditingLogo(false);
-    }
+  const handleSaveLogo = (processedImage: string) => {
+    setLogo(processedImage);
+    setShowImageEditor(false);
   };
 
   const handleContinue = async () => {
@@ -161,7 +108,7 @@ const RegisterTeamScreen = () => {
         secondaryColor,
         logo
       });
-      navigate('/register-privacy');
+      navigate('/dashboard');
     } catch (err: any) {
       alert(err.message || 'Erro ao criar time');
     }
@@ -240,7 +187,7 @@ const RegisterTeamScreen = () => {
               Seu time já foi <span className="text-primary">cadastrado?</span>
             </h1>
             <p className="text-slate-300 text-base font-normal leading-relaxed">
-              Verifique se alguém já criou o esquadrão no AmaPlay antes de começar.
+              Verifique se alguém já criou o esquadrão no AmaFut antes de começar.
             </p>
 
             <div className="flex flex-col gap-4 mt-4">
@@ -256,19 +203,17 @@ const RegisterTeamScreen = () => {
                 <p className="text-slate-400 text-sm">Vou pedir para participar de um time que já existe.</p>
               </button>
 
-              {(intendedRole === 'presidente' || intendedRole === 'vice-presidente') && (
-                <button
-                  onClick={() => setMode('create')}
-                  className="w-full p-6 pb-2 rounded-2xl bg-surface-dark border border-white/10 hover:border-primary/50 transition-all text-left flex flex-col gap-2 group animate-in fade-in slide-in-from-bottom-2 duration-300"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="material-symbols-outlined text-primary text-3xl group-hover:scale-110 transition-transform">add_circle</span>
-                    <span className="material-symbols-outlined text-slate-600 group-hover:text-primary">arrow_forward</span>
-                  </div>
-                  <h3 className="text-white text-xl font-bold">Não, cadastrar novo time</h3>
-                  <p className="text-slate-400 text-sm">Eu sou o responsável por criar este esquadrão.</p>
-                </button>
-              )}
+              <button
+                onClick={() => setMode('create')}
+                className="w-full p-6 pb-2 rounded-2xl bg-surface-dark border border-white/10 hover:border-primary/50 transition-all text-left flex flex-col gap-2 group animate-in fade-in slide-in-from-bottom-2 duration-300"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="material-symbols-outlined text-primary text-3xl group-hover:scale-110 transition-transform">add_circle</span>
+                  <span className="material-symbols-outlined text-slate-600 group-hover:text-primary">arrow_forward</span>
+                </div>
+                <h3 className="text-white text-xl font-bold">Não, cadastrar novo time</h3>
+                <p className="text-slate-400 text-sm">Eu sou o responsável por criar este esquadrão.</p>
+              </button>
             </div>
           </div>
         ) : mode === 'confirm' ? (
@@ -392,9 +337,7 @@ const RegisterTeamScreen = () => {
               {!isSearching && searchTerm.length > 3 && foundTeams.length === 0 && (
                 <div className="text-center py-10">
                   <p className="text-slate-500">Nenhum time encontrado para "{searchTerm}"</p>
-                  {(intendedRole === 'presidente' || intendedRole === 'vice-presidente') && (
-                    <button onClick={() => setMode('create')} className="text-primary font-bold mt-2 hover:underline transition-all">Criar este time agora</button>
-                  )}
+                  <button onClick={() => setMode('create')} className="text-primary font-bold mt-2 hover:underline transition-all">Criar este time agora</button>
                 </div>
               )}
             </div>
@@ -565,78 +508,14 @@ const RegisterTeamScreen = () => {
       </div>
 
       {/* --- LOGO EDITOR MODAL --- */}
-      {isEditingLogo && rawLogo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-surface-dark w-full max-w-sm rounded-2xl border border-white/10 overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-            <div className="p-4 border-b border-white/10 flex justify-between items-center bg-background-dark">
-              <h3 className="text-white font-bold text-lg">Ajustar Escudo</h3>
-              <button onClick={() => setIsEditingLogo(false)} className="text-slate-400 hover:text-white">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <div className="flex-1 relative bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-[#121212] overflow-hidden flex items-center justify-center min-h-[300px]">
-              <div className="relative size-64 border-2 border-primary/50 rounded-full shadow-[0_0_0_9999px_rgba(0,0,0,0.7)] z-10 pointer-events-none"></div>
-              <img
-                src={rawLogo}
-                alt="Logo Preview"
-                style={{
-                  transform: `scale(${imgScale}) translate(${imgPosX}px, ${imgPosY}px)`,
-                  transition: 'transform 0.1s linear'
-                }}
-                className="max-w-none"
-              />
-            </div>
-
-            <div className="p-4 bg-surface-dark space-y-4">
-              {/* Controls */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-slate-400">zoom_in</span>
-                  <input
-                    type="range" min="0.1" max="3" step="0.1"
-                    value={imgScale} onChange={(e) => setImgScale(parseFloat(e.target.value))}
-                    className="w-full h-2 bg-black/40 rounded-lg appearance-none cursor-pointer accent-primary"
-                  />
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-slate-400">drag_pan</span>
-                  <div className="flex gap-2 w-full">
-                    <input
-                      type="range" min="-150" max="150" step="1"
-                      value={imgPosX} onChange={(e) => setImgPosX(parseFloat(e.target.value))}
-                      className="w-1/2 h-2 bg-black/40 rounded-lg appearance-none cursor-pointer accent-primary"
-                    />
-                    <input
-                      type="range" min="-150" max="150" step="1"
-                      value={imgPosY} onChange={(e) => setImgPosY(parseFloat(e.target.value))}
-                      className="w-1/2 h-2 bg-black/40 rounded-lg appearance-none cursor-pointer accent-primary"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={handleRemoveBg}
-                  disabled={isProcessingBg}
-                  className={`flex-1 py-3 rounded-xl border font-bold text-sm flex items-center justify-center gap-2 transition-colors ${isProcessingBg ? 'bg-white/5 border-white/5 text-slate-500' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white'
-                    }`}
-                >
-                  {isProcessingBg ? <span className="material-symbols-outlined animate-spin">progress_activity</span> : <span className="material-symbols-outlined">magic_button</span>}
-                  Remover Fundo
-                </button>
-                <button
-                  onClick={handleSaveLogo}
-                  className="flex-1 py-3 rounded-xl bg-primary text-background-dark font-bold text-sm hover:bg-primary-dark transition-colors flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined">check</span>
-                  Salvar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {showImageEditor && rawLogo && (
+        <ImageEditor
+          imageSrc={rawLogo}
+          onSave={handleSaveLogo}
+          onCancel={() => setShowImageEditor(false)}
+          aspectRatio={1}
+          allowBackgroundRemoval={true}
+        />
       )}
 
       {/* --- COLOR PICKER MODAL --- */}
@@ -697,6 +576,8 @@ const RegisterTeamScreen = () => {
           </div>
         </div>
       )}
+
+
 
     </div>
   );

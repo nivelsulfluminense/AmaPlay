@@ -47,8 +47,8 @@ const ForgotPasswordScreen = () => {
 
       <div className="relative z-10 w-full px-6 py-8 flex flex-col flex-1 max-w-md mx-auto">
         <div className="flex justify-center mb-8">
-          <div className="flex items-center justify-center size-24 rounded-full bg-surface-dark border border-white/10 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
-            <span className="material-symbols-outlined text-text-muted text-5xl">lock_reset</span>
+          <div className="flex items-center justify-center size-24 rounded-full bg-surface-dark border border-white/10 shadow-[0_0_30px_rgba(0,0,0,0.5)] overflow-hidden p-4">
+            <img src="/assets/logo/amafut_logo.png" alt="AmaFut Logo" className="w-full h-full object-contain" />
           </div>
         </div>
 
@@ -77,7 +77,7 @@ const ForgotPasswordScreen = () => {
                 <input
                   id="email"
                   type="email"
-                  placeholder="exemplo@amaplay.com"
+                  placeholder="exemplo@amafut.com"
                   className="w-full h-14 bg-surface-dark border border-white/10 rounded-xl pl-12 pr-4 text-white placeholder:text-slate-500 focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

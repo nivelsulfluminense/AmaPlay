@@ -30,19 +30,19 @@ const RegisterPrivacyScreen = () => {
 
       {/* Progress Section */}
       <div className="flex flex-col items-center justify-center px-6 pb-2 z-10">
-          <div className="flex w-full max-w-sm flex-row items-center justify-between gap-2 mb-3">
-            <div className="h-1.5 flex-1 rounded-full bg-primary/80"></div>
-            <div className="h-1.5 flex-1 rounded-full bg-primary/80"></div>
-            <div className="h-1.5 flex-1 rounded-full bg-primary shadow-[0_0_10px_rgba(19,236,91,0.5)]"></div>
-          </div>
-          <p className="text-primary text-sm font-semibold tracking-wide uppercase">Etapa 3 de 3</p>
+        <div className="flex w-full max-w-sm flex-row items-center justify-between gap-2 mb-3">
+          <div className="h-1.5 flex-1 rounded-full bg-primary/80"></div>
+          <div className="h-1.5 flex-1 rounded-full bg-primary/80"></div>
+          <div className="h-1.5 flex-1 rounded-full bg-primary shadow-[0_0_10px_rgba(19,236,91,0.5)]"></div>
+        </div>
+        <p className="text-primary text-sm font-semibold tracking-wide uppercase">Etapa 3 de 3</p>
       </div>
 
       <main className="flex-1 w-full max-w-md mx-auto flex flex-col px-6 pb-32 overflow-y-auto no-scrollbar z-10">
         <div className="mb-2 mt-2">
           <h1 className="text-white text-[32px] font-bold leading-tight tracking-tight">Quase lá!</h1>
           <p className="text-slate-400 text-base font-normal leading-relaxed mt-3">
-            Configure sua privacidade e aceite os termos para finalizar seu cadastro no AmaPlay.
+            Configure sua privacidade e aceite os termos para finalizar seu cadastro no AmaFut.
           </p>
         </div>
 
@@ -52,7 +52,7 @@ const RegisterPrivacyScreen = () => {
             Quem pode ver seu perfil?
           </h3>
           <div className="flex flex-col gap-3">
-            <label 
+            <label
               className={`group relative flex items-start gap-4 rounded-2xl border bg-surface-dark p-4 cursor-pointer transition-all hover:shadow-lg ${privacy === 'public' ? 'border-primary bg-surface-dark/80' : 'border-[#326744] hover:border-primary/50'}`}
               onClick={() => setPrivacy('public')}
             >
@@ -63,16 +63,16 @@ const RegisterPrivacyScreen = () => {
                 </div>
                 <p className="text-[#92c9a4] text-sm leading-normal">Qualquer pessoa pode ver suas estatísticas e histórico de jogos.</p>
               </div>
-              <input 
-                checked={privacy === 'public'} 
+              <input
+                checked={privacy === 'public'}
                 onChange={() => setPrivacy('public')}
-                className="mt-1 h-5 w-5 border-2 border-[#326744] bg-transparent text-primary focus:ring-offset-0 focus:ring-0 checked:border-primary checked:bg-none checked:before:bg-primary" 
-                name="privacy" 
-                type="radio" 
+                className="mt-1 h-5 w-5 border-2 border-[#326744] bg-transparent text-primary focus:ring-offset-0 focus:ring-0 checked:border-primary checked:bg-none checked:before:bg-primary"
+                name="privacy"
+                type="radio"
               />
             </label>
 
-            <label 
+            <label
               className={`group relative flex items-start gap-4 rounded-2xl border bg-surface-dark p-4 cursor-pointer transition-all hover:shadow-lg ${privacy === 'private' ? 'border-primary bg-surface-dark/80' : 'border-[#326744] hover:border-primary/50'}`}
               onClick={() => setPrivacy('private')}
             >
@@ -83,12 +83,12 @@ const RegisterPrivacyScreen = () => {
                 </div>
                 <p className="text-[#92c9a4] text-sm leading-normal">Apenas membros dos seus times confirmados podem ver seu perfil completo.</p>
               </div>
-              <input 
+              <input
                 checked={privacy === 'private'}
                 onChange={() => setPrivacy('private')}
-                className="mt-1 h-5 w-5 border-2 border-[#326744] bg-transparent text-primary focus:ring-offset-0 focus:ring-0 checked:border-primary checked:bg-none" 
-                name="privacy" 
-                type="radio" 
+                className="mt-1 h-5 w-5 border-2 border-[#326744] bg-transparent text-primary focus:ring-offset-0 focus:ring-0 checked:border-primary checked:bg-none"
+                name="privacy"
+                type="radio"
               />
             </label>
           </div>
@@ -114,8 +114,8 @@ const RegisterPrivacyScreen = () => {
         <div className="mt-8 mb-4">
           <label className="flex items-start gap-3 p-2 cursor-pointer group">
             <div className="relative flex items-center">
-              <input 
-                className="peer h-6 w-6 cursor-pointer appearance-none rounded-lg border-2 border-[#326744] bg-transparent transition-all checked:border-primary checked:bg-primary hover:border-primary focus:ring-0 focus:ring-offset-0" 
+              <input
+                className="peer h-6 w-6 cursor-pointer appearance-none rounded-lg border-2 border-[#326744] bg-transparent transition-all checked:border-primary checked:bg-primary hover:border-primary focus:ring-0 focus:ring-offset-0"
                 type="checkbox"
                 checked={termsAccepted}
                 onChange={(e) => setTermsAccepted(e.target.checked)}
@@ -133,14 +133,13 @@ const RegisterPrivacyScreen = () => {
 
       <div className="fixed bottom-0 left-0 right-0 z-20 p-6 bg-gradient-to-t from-background-dark via-background-dark to-transparent pt-12">
         <div className="max-w-md mx-auto w-full">
-          <button 
+          <button
             onClick={() => navigate('/register-profile')}
             disabled={!termsAccepted}
-            className={`w-full h-14 rounded-full transition-all flex items-center justify-center gap-2 group ${
-              termsAccepted 
-                ? 'bg-primary hover:bg-green-400 active:scale-[0.98] shadow-[0_4px_20px_rgba(19,236,91,0.3)] cursor-pointer' 
+            className={`w-full h-14 rounded-full transition-all flex items-center justify-center gap-2 group ${termsAccepted
+                ? 'bg-primary hover:bg-green-400 active:scale-[0.98] shadow-[0_4px_20px_rgba(19,236,91,0.3)] cursor-pointer'
                 : 'bg-surface-dark border border-white/10 text-slate-500 cursor-not-allowed opacity-60'
-            }`}
+              }`}
           >
             <span className={`text-lg font-bold tracking-tight ${termsAccepted ? 'text-background-dark' : 'text-slate-500'}`}>Concluir Cadastro</span>
             <span className={`material-symbols-outlined transition-transform ${termsAccepted ? 'text-background-dark group-hover:translate-x-1' : 'text-slate-500'}`}>arrow_forward</span>

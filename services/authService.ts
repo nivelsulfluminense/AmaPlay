@@ -60,7 +60,7 @@ export const authService = {
      * ✔️ Mensagens de erro distintas
      * ❌ SEM JOIN com teams no primeiro login
      */
-    login: async (email: string, pass: string): Promise<User> => {
+    login: async (email: string, pass: string): Promise<any> => {
         // 1️⃣ Autenticar
         const { data, error } = await supabase.auth.signInWithPassword({
             email,
@@ -83,87 +83,10 @@ export const authService = {
             throw new Error('Sessão inválida. Por favor, tente novamente.');
         }
 
-        // 2️⃣ Validar sessão com getUser()
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-        if (userError || !user) {
-            console.error('❌ Erro ao validar sessão:', userError);
-            await supabase.auth.signOut();
-            throw new Error('Sessão inválida. Por favor, faça login novamente.');
-        }
-
-        console.log('✅ Sessão validada para:', user.id);
-
-        // 3️⃣ Buscar perfil (com maybeSingle)
-        const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .maybeSingle();
-
-        // Mensagens de erro distintas
-        if (profileError) {
-            console.error('❌ Erro RLS/Database:', profileError);
-            await supabase.auth.signOut();
-            throw new Error('RLS bloqueando acesso ao perfil. Contate o suporte.');
-        }
-
-        if (!profile) {
-            console.warn('⚠️ Perfil inexistente para:', user.id);
-
-            // Failsafe: Tentar criar perfil
-            const { error: insertError } = await supabase.from('profiles').insert({
-                id: user.id,
-                email: user.email!,
-                name: user.user_metadata?.name || user.user_metadata?.full_name || 'Visitante',
-                role: null,
-                intended_role: null,
-                status: 'pending',
-                is_setup_complete: false,
-                is_public: true
-            });
-
-            if (insertError) {
-                console.error('❌ Erro ao criar perfil:', insertError);
-                await supabase.auth.signOut();
-                throw new Error('Não foi possível criar seu perfil. Contate o suporte.');
-            }
-
-            // Buscar perfil criado
-            const { data: newProfile, error: newProfileError } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', user.id)
-                .maybeSingle();
-
-            if (newProfileError || !newProfile) {
-                console.error('❌ Perfil não encontrado após criação:', newProfileError);
-                await supabase.auth.signOut();
-                throw new Error('Perfil inexistente. Por favor, contate o suporte.');
-            }
-
-            return {
-                ...newProfile,
-                token: data.session.access_token,
-                teamDetails: null
-            };
-        }
-
-        // 4️⃣ Buscar detalhes do time separadamente (Evita RLS erro no join)
-        let teamDetails = null;
-        if (profile.team_id) {
-            const { data: team } = await supabase
-                .from('teams')
-                .select('*')
-                .eq('id', profile.team_id)
-                .maybeSingle();
-            teamDetails = team || null;
-        }
-
+        console.log('✅ Autenticação básica ok para:', data.user.id);
         return {
-            ...profile,
-            token: data.session.access_token,
-            teamDetails
+            ...data.user,
+            token: data.session.access_token
         };
     },
 
@@ -225,11 +148,11 @@ export const authService = {
                 role: profile.role,
                 intended_role: profile.intended_role,
                 is_setup_complete: profile.is_setup_complete,
-                status: profile.status,
+                is_approved: profile.is_approved,
                 team_id: profile.team_id
             };
         } catch (error) {
-            console.error('Registration error:', error);
+            console.error('Erro no registro:', error);
             throw error;
         }
     },

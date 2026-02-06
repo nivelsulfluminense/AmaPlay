@@ -83,12 +83,13 @@ const LoginScreen = () => {
       <div className="relative z-10 w-full px-6 py-8 flex flex-col items-center max-w-md mx-auto">
         {/* Logo Section */}
         <div className="mb-8 flex flex-col items-center gap-4">
-          <div className="flex items-center justify-center size-20 rounded-full bg-primary/10 border border-primary/20 backdrop-blur-sm shadow-[0_0_30px_rgba(19,236,91,0.2)]">
-            <span className="material-symbols-outlined text-primary text-5xl">sports_soccer</span>
+          <div className="flex items-center justify-center size-24 rounded-full bg-primary/10 border border-primary/20 backdrop-blur-sm shadow-[0_0_30px_rgba(19,236,91,0.2)] overflow-hidden p-2">
+            <img src="/assets/logo/amafut_logo.png" alt="AmaFut Logo" className="w-full h-full object-contain" />
           </div>
           <div className="text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-white font-display">AmaPlay</h1>
-            <p className="text-text-muted mt-2 text-sm font-light">Entre para escalar seu time e marcar jogos.</p>
+            <h1 className="text-3xl font-bold tracking-tight text-white font-display">AmaFut</h1>
+            <p className="text-text-muted mt-2 text-sm font-light">Entre você também para o nosso time.</p>
+            <p className="text-text-muted text-xs font-bold uppercase tracking-[0.2em] mt-1 opacity-80">Nunca foi só futebol</p>
           </div>
         </div>
 
@@ -115,7 +116,7 @@ const LoginScreen = () => {
               <input
                 id="email"
                 type="email"
-                placeholder="exemplo@amaplay.com"
+                placeholder="exemplo@amafut.com"
                 className="w-full h-14 bg-input-bg border border-input-border rounded-xl pl-12 pr-4 text-white placeholder:text-slate-500 focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}

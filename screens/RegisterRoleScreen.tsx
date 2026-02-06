@@ -42,7 +42,7 @@ const RegisterRoleScreen = () => {
         <button onClick={() => navigate('/')} className="text-white flex size-10 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors">
           <span className="material-symbols-outlined text-2xl">arrow_back</span>
         </button>
-        <h2 className="text-white text-lg font-bold leading-tight tracking-tight">AmaPlay</h2>
+        <h2 className="text-white text-lg font-bold leading-tight tracking-tight">AmaFut</h2>
         <div className="size-10"></div>
       </header>
 
@@ -87,8 +87,8 @@ const RegisterRoleScreen = () => {
             onClick={handleContinue}
             disabled={isLoading}
             className={`w-full h-14 rounded-full flex items-center justify-center gap-2 transition-all duration-200 ${isLoading
-                ? 'bg-surface-dark border border-white/10 text-slate-500'
-                : 'bg-primary shadow-[0_0_20px_rgba(19,236,91,0.3)] hover:shadow-[0_0_30px_rgba(19,236,91,0.5)] active:scale-[0.98]'
+              ? 'bg-surface-dark border border-white/10 text-slate-500'
+              : 'bg-primary shadow-[0_0_20px_rgba(19,236,91,0.3)] hover:shadow-[0_0_30px_rgba(19,236,91,0.5)] active:scale-[0.98]'
               }`}
           >
             {isLoading ? (

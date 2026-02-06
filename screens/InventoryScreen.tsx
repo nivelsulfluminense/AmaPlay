@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useUser } from '../contexts/UserContext';
 import { dataService, LegacyInventoryItem as InventoryItem } from '../services/dataService';
+import { supabase } from '../services/supabase';
 
 const InventoryScreen = () => {
+  const { role } = useUser();
+  const isManager = role === 'presidente' || role === 'vice-presidente';
+
   const [showModal, setShowModal] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [filter, setFilter] = useState('');
@@ -17,11 +22,74 @@ const InventoryScreen = () => {
   const [formMaxQty, setFormMaxQty] = useState('');
   const [formCategory, setFormCategory] = useState('Equipamento');
   const [formStatus, setFormStatus] = useState<'excellent' | 'good' | 'fair' | 'poor'>('excellent');
+  const [formResponsibleId, setFormResponsibleId] = useState<string | null>(null);
+
+  // New features
+  const [players, setPlayers] = useState<any[]>([]);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showManageModal, setShowManageModal] = useState(false);
+  const [categories, setCategories] = useState<string[]>(["Equipamento", "Médico", "Treino", "Uniformes", "Outros"]);
+  const [newCatName, setNewCatName] = useState('');
 
   // Load Data
   useEffect(() => {
     loadItems();
+    loadPlayers();
+    loadSettings();
   }, []);
+
+  const loadSettings = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase.from('profiles').select('team_id').eq('id', user.id).single();
+      if (!profile?.team_id) return;
+
+      const { data: team } = await supabase.from('teams').select('inventory_categories').eq('id', profile.team_id).single();
+      if (team?.inventory_categories) {
+        setCategories(team.inventory_categories);
+      }
+    } catch (e) {
+      console.error("Failed to load settings", e);
+    }
+  };
+
+  const saveSettings = async (newCats: string[]) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase.from('profiles').select('team_id').eq('id', user.id).single();
+      if (!profile?.team_id) return;
+
+      await supabase.from('teams').update({ inventory_categories: newCats }).eq('id', profile.team_id);
+      setCategories(newCats);
+    } catch (e) {
+      alert("Erro ao salvar categorias");
+    }
+  };
+
+  const loadPlayers = async () => {
+    try {
+      const p = await dataService.players.list(true); // Include all members
+      setPlayers(p);
+    } catch (e) {
+      console.error("Failed to load players", e);
+    }
+  };
+
+  const handleAddCategory = async () => {
+    if (!newCatName.trim()) return;
+    const updated = [...categories, newCatName.trim()];
+    await saveSettings(updated);
+    setNewCatName('');
+  };
+
+  const handleRemoveCategory = async (name: string) => {
+    const updated = categories.filter(c => c !== name);
+    await saveSettings(updated);
+  };
 
   const loadItems = async () => {
     setIsLoading(true);
@@ -51,6 +119,7 @@ const InventoryScreen = () => {
     setFormMaxQty('');
     setFormCategory('Equipamento');
     setFormStatus('excellent');
+    setFormResponsibleId(null);
     setShowModal(true);
   };
 
@@ -61,6 +130,7 @@ const InventoryScreen = () => {
     setFormMaxQty(item.maxQuantity.toString());
     setFormCategory(item.category);
     setFormStatus(item.status); // @ts-ignore
+    setFormResponsibleId(item.responsibleId || null);
     setShowModal(true);
   };
 
@@ -77,7 +147,8 @@ const InventoryScreen = () => {
       maxQuantity: max,
       status: formStatus,
       image: "https://cdn-icons-png.flaticon.com/512/679/679720.png",
-      color: determineColor(formStatus)
+      color: determineColor(formStatus),
+      responsibleId: formResponsibleId
     };
 
     setIsLoading(true);
@@ -118,7 +189,33 @@ const InventoryScreen = () => {
   };
 
   const handleReportProblem = () => {
-    alert("Relatório de inventário gerado!");
+    setShowReportModal(true);
+  };
+
+  const handleDownloadCSV = () => {
+    const headers = ["Item", "Categoria", "Quantidade", "Ideal", "Status", "Responsavel"];
+    const rows = items.map(i => [
+      i.name,
+      i.category,
+      i.quantity,
+      i.maxQuantity,
+      i.status,
+      players.find(p => p.id === i.responsibleId)?.name || "Time"
+    ]);
+
+    const csvContent = "\uFEFF" + [headers, ...rows].map(e => e.join(";")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Relatorio_Estoque_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handlePrintPDF = () => {
+    window.print();
   };
 
   const filteredItems = items.filter(item =>
@@ -127,7 +224,7 @@ const InventoryScreen = () => {
   );
 
   return (
-    <div className="bg-background-dark min-h-screen pb-24 relative">
+    <div className="bg-background-dark min-h-screen pb-48 relative">
       {/* Header */}
       <div className="flex items-center p-4 pt-6 pb-2 justify-between sticky top-0 z-20 bg-background-dark/95 backdrop-blur-sm">
         <h2 className="text-white text-xl font-bold leading-tight tracking-[-0.015em] flex-1">Estoque de Materiais</h2>
@@ -139,11 +236,11 @@ const InventoryScreen = () => {
             <span className="material-symbols-outlined">search</span>
           </button>
           <button
-            onClick={handleOpenAdd}
-            className="flex items-center justify-center size-10 rounded-full bg-primary text-background-dark hover:bg-green-500 transition-colors"
-            title="Adicionar Item"
+            onClick={() => isManager ? setShowManageModal(true) : alert("Acesso restrito a gestores")}
+            className={`flex items-center justify-center size-10 rounded-full bg-surface-dark text-primary hover:bg-white/10 transition-colors border border-white/10 ${!isManager ? 'opacity-50 grayscale' : ''}`}
+            title="Gerenciar Opções do Estoque"
           >
-            <span className="material-symbols-outlined">add</span>
+            <span className="material-symbols-outlined">edit_note</span>
           </button>
         </div>
       </div>
@@ -162,31 +259,53 @@ const InventoryScreen = () => {
       )}
 
       {/* Top Stats Cards */}
-      <div className="w-full overflow-x-auto no-scrollbar px-4 pt-2 pb-6">
-        <div className="flex gap-3 min-w-max">
-          <div className="flex min-w-[140px] flex-col gap-1 rounded-xl p-5 bg-surface-dark shadow-sm border border-white/5">
-            <div className="flex items-center gap-2 text-gray-400">
-              <span className="material-symbols-outlined text-[20px]">inventory_2</span>
-              <p className="text-sm font-medium leading-normal">Total de Itens</p>
+      <div className="px-4 pt-2 pb-6">
+        <div className="grid grid-cols-3 gap-2.5">
+          <div className="flex flex-col justify-between rounded-2xl p-4 bg-white/[0.03] border border-white/5 backdrop-blur-sm h-28 transition-all active:scale-95">
+            <div className="flex items-center gap-2 text-slate-500">
+              <span className="material-symbols-outlined text-lg">inventory_2</span>
+              <p className="text-[10px] font-black uppercase tracking-widest">Total</p>
             </div>
-            <p className="text-white text-3xl font-bold leading-tight mt-1">{totalItems}</p>
+            <div className="mt-auto">
+              <p className="text-white text-3xl font-black leading-none">{totalItems}</p>
+              <div className="h-1 w-8 bg-white/10 rounded-full mt-2"></div>
+            </div>
           </div>
-          <div className="flex min-w-[140px] flex-col gap-1 rounded-xl p-5 bg-surface-dark shadow-sm border border-white/5 relative overflow-hidden">
-            <div className="absolute right-0 top-0 p-3 opacity-10">
+
+          <div className="flex flex-col justify-between rounded-2xl p-4 bg-primary/5 border border-primary/10 backdrop-blur-sm h-28 relative overflow-hidden transition-all active:scale-95">
+            <div className="absolute -right-2 -bottom-2 opacity-5">
               <span className="material-symbols-outlined text-[64px] text-primary">build</span>
             </div>
             <div className="flex items-center gap-2 text-primary">
-              <span className="material-symbols-outlined text-[20px] filled">build</span>
-              <p className="text-sm font-medium leading-normal">Manutenção</p>
+              <span className="material-symbols-outlined text-lg filled">build</span>
+              <p className="text-[10px] font-black uppercase tracking-widest text-primary/80">Reparo</p>
             </div>
-            <p className="text-3xl font-bold leading-tight mt-1 text-primary">3</p>
+            <div className="mt-auto">
+              <p className="text-primary text-3xl font-black leading-none">3</p>
+              <div className="h-1 w-8 bg-primary/20 rounded-full mt-2"></div>
+            </div>
           </div>
-          <div className="flex min-w-[140px] flex-col gap-1 rounded-xl p-5 bg-surface-dark shadow-sm border border-white/5">
-            <div className="flex items-center gap-2 text-orange-400">
-              <span className="material-symbols-outlined text-[20px]">warning</span>
-              <p className="text-sm font-medium leading-normal">Estoque Baixo</p>
+
+          <div className="flex flex-col justify-between rounded-2xl p-4 bg-orange-500/5 border border-orange-500/10 backdrop-blur-sm h-28 transition-all active:scale-95 overflow-hidden">
+            <div className="flex items-center gap-2 text-orange-500">
+              <span className="material-symbols-outlined text-lg">{lowStock > 0 ? 'error' : 'check_circle'}</span>
+              <p className="text-[10px] font-black uppercase tracking-widest text-orange-500/80">Monitor</p>
             </div>
-            <p className="text-3xl font-bold leading-tight mt-1 text-orange-400">{lowStock}</p>
+            <div className="mt-auto">
+              {lowStock > 0 ? (
+                <>
+                  <p className="text-3xl font-black leading-none text-orange-500 animate-pulse">
+                    {lowStock}
+                  </p>
+                  <p className="text-[10px] text-orange-500/60 font-bold mt-1">Itens baixos</p>
+                </>
+              ) : (
+                <p className="text-[11px] font-black leading-tight text-slate-500 uppercase tracking-tight">
+                  Está tudo sob controle
+                </p>
+              )}
+              <div className={`h-1 w-8 rounded-full mt-2 ${lowStock > 0 ? 'bg-orange-500/30' : 'bg-primary/20'}`}></div>
+            </div>
           </div>
         </div>
       </div>
@@ -232,6 +351,14 @@ const InventoryScreen = () => {
                 <div className="w-full bg-black/40 h-1.5 rounded-full mt-2 overflow-hidden">
                   <div className={`h-full rounded-full bg-${item.color}`} style={{ width: `${percentage}%` }}></div>
                 </div>
+                {item.responsibleId && (
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[14px] text-primary">person</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase truncate">
+                      {players.find(p => p.id === item.responsibleId)?.name || 'Carregando...'}
+                    </span>
+                  </div>
+                )}
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }}
@@ -251,7 +378,7 @@ const InventoryScreen = () => {
       </div>
 
       {/* Floating Action Buttons */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 p-4 pb-8 bg-gradient-to-t from-background-dark via-background-dark to-transparent pt-12">
+      <div className="fixed bottom-20 left-0 right-0 z-30 p-4 bg-gradient-to-t from-background-dark via-background-dark/80 to-transparent pt-10">
         <div className="flex gap-4 max-w-lg mx-auto">
           <button
             onClick={handleReportProblem}
@@ -331,11 +458,9 @@ const InventoryScreen = () => {
                   value={formCategory}
                   onChange={(e) => setFormCategory(e.target.value)}
                 >
-                  <option>Equipamento</option>
-                  <option>Médico</option>
-                  <option>Treino</option>
-                  <option>Uniformes</option>
-                  <option>Outros</option>
+                  {categories.map(cat => (
+                    <option key={cat}>{cat}</option>
+                  ))}
                 </select>
               </div>
 
@@ -352,6 +477,25 @@ const InventoryScreen = () => {
                   <option value="poor">Danificado / Ruim</option>
                 </select>
               </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Responsável pelo Ítem</label>
+                <div className="relative">
+                  <select
+                    className="w-full bg-background-dark border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-primary focus:border-primary appearance-none"
+                    value={formResponsibleId || ''}
+                    onChange={(e) => setFormResponsibleId(e.target.value || null)}
+                  >
+                    <option value="">Nenhum (Com o Time)</option>
+                    {players.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                    <span className="material-symbols-outlined">expand_more</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-3 mt-6">
@@ -367,6 +511,166 @@ const InventoryScreen = () => {
                 className={`flex-1 py-3 rounded-xl bg-primary text-background-dark font-bold hover:bg-primary-dark ${(!formName || !formQty || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {isLoading ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REPORT MODAL */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
+          <div className="bg-surface-dark w-full max-w-md rounded-2xl border border-white/10 p-6 shadow-2xl overflow-y-auto max-h-[90vh] print:p-0 print:bg-white print:text-black">
+            <div className="flex justify-between items-center mb-6 print:hidden">
+              <h3 className="text-white text-xl font-bold">Relatório de Estoque</h3>
+              <button onClick={() => setShowReportModal(false)} className="size-10 flex items-center justify-center rounded-full bg-white/5 text-slate-400">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div id="report-content" className="space-y-6">
+              <div className="p-4 bg-background-dark/50 rounded-xl border border-white/5 print:bg-gray-100 print:text-black">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-xs font-black text-primary uppercase tracking-widest">Resumo Geral</h4>
+                  <span className="text-[10px] text-slate-500">{new Date().toLocaleDateString('pt-BR')}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[10px] text-slate-500 uppercase font-bold">Total de Itens</p>
+                    <p className="text-2xl font-black text-white print:text-black">{totalItems}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-500 uppercase font-bold">Categorias</p>
+                    <p className="text-2xl font-black text-white print:text-black">{new Set(items.map(i => i.category)).size}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest pl-1">Detalhes do Inventário</h4>
+                <div className="space-y-2 overflow-x-auto">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/10 text-slate-500 print:border-black">
+                        <th className="py-2 font-bold">Item</th>
+                        <th className="py-2 font-bold text-center">Qtd</th>
+                        <th className="py-2 font-bold text-right pr-2">Responsável</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 print:divide-gray-300">
+                      {items.map(i => (
+                        <tr key={i.id} className="text-white print:text-black">
+                          <td className="py-3 font-medium">
+                            {i.name}
+                            <p className="text-[10px] text-slate-500">{i.category}</p>
+                          </td>
+                          <td className="py-3 text-center font-black">
+                            {i.quantity}/{i.maxQuantity}
+                          </td>
+                          <td className="py-3 text-right text-[10px] font-bold uppercase truncate max-w-[100px] pr-2">
+                            {players.find(p => p.id === i.responsibleId)?.name || 'Time'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 mt-8 print:hidden">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={handleDownloadCSV}
+                  className="flex items-center justify-center gap-2 py-3 bg-surface-dark border border-white/10 rounded-xl text-white font-bold hover:bg-white/5"
+                >
+                  <span className="material-symbols-outlined text-green-500">table_view</span>
+                  Excel (CSV)
+                </button>
+                <button
+                  onClick={handlePrintPDF}
+                  className="flex items-center justify-center gap-2 py-3 bg-surface-dark border border-white/10 rounded-xl text-white font-bold hover:bg-white/5"
+                >
+                  <span className="material-symbols-outlined text-red-500">picture_as_pdf</span>
+                  Imprimir / PDF
+                </button>
+              </div>
+              <button
+                onClick={() => setShowReportModal(false)}
+                className="w-full py-4 rounded-xl bg-primary text-background-dark font-black uppercase tracking-widest mt-2"
+              >
+                Concluído
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MANAGE MODAL (CATEGORIES) */}
+      {showManageModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl animate-in zoom-in-95 duration-200">
+          <div className="bg-surface-dark w-full max-w-sm rounded-3xl border border-white/10 p-6 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-white text-xl font-black">Gerenciar Estoque</h3>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Categorias de Materiais</p>
+              </div>
+              <button
+                onClick={() => setShowManageModal(false)}
+                className="size-10 flex items-center justify-center rounded-full bg-white/5 text-slate-400 hover:bg-white/10"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Nova Categoria</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Ex: Suplementos"
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    className="flex-1 bg-background-dark border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:ring-primary focus:border-primary"
+                  />
+                  <button
+                    onClick={handleAddCategory}
+                    disabled={!newCatName.trim()}
+                    className="size-12 rounded-xl bg-primary text-background-dark flex items-center justify-center disabled:opacity-30 active:scale-90 transition-transform"
+                  >
+                    <span className="material-symbols-outlined font-black">add</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-4 border-t border-white/5">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Categorias Atuais</label>
+                <div className="space-y-2">
+                  {categories.map((cat) => (
+                    <div key={cat} className="flex items-center justify-between p-3 bg-background-dark rounded-xl border border-white/5 group">
+                      <span className="text-white text-sm font-bold">{cat}</span>
+                      <button
+                        onClick={() => handleRemoveCategory(cat)}
+                        className="size-8 flex items-center justify-center rounded-lg bg-red-500/10 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <span className="material-symbols-outlined text-lg">delete</span>
+                      </button>
+                    </div>
+                  ))}
+                  {categories.length === 0 && (
+                    <p className="text-center py-4 text-xs text-slate-600 italic">Nenhuma categoria personalizada.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8">
+              <button
+                onClick={() => setShowManageModal(false)}
+                className="w-full py-4 rounded-2xl bg-primary text-background-dark font-black uppercase tracking-widest active:scale-95 transition-transform"
+              >
+                Salvar Alterações
               </button>
             </div>
           </div>

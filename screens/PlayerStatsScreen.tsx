@@ -4,6 +4,8 @@ import { useUser } from '../contexts/UserContext';
 import { removeBackground } from '@imgly/background-removal';
 import * as htmlToImage from 'html-to-image';
 import { dataService, Player } from '../services/dataService';
+import { supabase } from '../services/supabase';
+import { ImageEditor } from '../components/ImageEditor';
 
 // Available Teams Data
 const PRO_TEAMS = [
@@ -95,26 +97,50 @@ const PlayerStatsScreen = () => {
     // Teammates Logic
     const [teammates, setTeammates] = useState<any[]>([]);
 
-    useEffect(() => {
-        const loadTeammates = async () => {
-            try {
-                const players = await dataService.players.list();
-                const teamPlayers = players
-                    .filter(p => p.teamId === teamId)
-                    .map(p => ({
-                        id: p.id,
-                        name: p.name,
-                        pos: p.position,
-                        avatar: p.avatar,
-                        voteCount: p.voteCount || 0,
-                        hasVoted: p.hasVoted || false,
-                        stats: p.stats
-                    }));
-                setTeammates(teamPlayers);
-            } catch (err) {
-                console.error("Failed to load teammates", err);
+    const [myCastedVotes, setMyCastedVotes] = useState<Record<string, any>>({});
+
+    const loadTeammates = async () => {
+        try {
+            const players = await dataService.players.list();
+            const teamPlayers = players
+                .filter(p => p.teamId === teamId && p.id !== userId && p.cardAvatar)
+                .map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    pos: p.position,
+                    avatar: p.cardAvatar, // Use card photo
+                    voteCount: p.voteCount || 0,
+                    stats: p.stats
+                }));
+            setTeammates(teamPlayers);
+
+            // Load current user's votes to show checkmarks
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: votes } = await supabase
+                    .from('player_votes')
+                    .select('target_id, pace, shooting, passing, dribbling, defending, physical')
+                    .eq('voter_id', user.id);
+
+                const voteMap: Record<string, any> = {};
+                votes?.forEach(v => {
+                    voteMap[v.target_id] = {
+                        pace: v.pace,
+                        shooting: v.shooting,
+                        passing: v.passing,
+                        dribbling: v.dribbling,
+                        defending: v.defending,
+                        physical: v.physical
+                    };
+                });
+                setMyCastedVotes(voteMap);
             }
-        };
+        } catch (err) {
+            console.error("Failed to load teammates/votes", err);
+        }
+    };
+
+    useEffect(() => {
         if (teamId) loadTeammates();
     }, [teamId]);
 
@@ -145,6 +171,19 @@ const PlayerStatsScreen = () => {
     const [removeBg, setRemoveBg] = useState(false);
     const [isProcessingBg, setIsProcessingBg] = useState(false);
     const [originalImage, setOriginalImage] = useState<string | null>(null);
+
+    // Image Editor State - NEW
+    const [showImageEditor, setShowImageEditor] = useState(false);
+
+    const handleSaveImage = (processedImage: string) => {
+        setLocalAvatar(processedImage);
+        setOriginalImage(processedImage);
+        setShowImageEditor(false);
+        // Reset manual adjustments since user cropped it perfectly
+        setImgScale(1);
+        setImgPosX(0);
+        setImgPosY(0);
+    };
 
     // Card Background State (Processed)
     const [activeCardBg, setActiveCardBg] = useState<string | null>(null);
@@ -374,11 +413,8 @@ const PlayerStatsScreen = () => {
             reader.onloadend = () => {
                 const result = reader.result as string;
                 setOriginalImage(result);
-                setLocalAvatar(result);
-                setImgScale(0.85); // Reset to slightly smaller
-                setImgPosX(0);
-                setImgPosY(40);
-                setRemoveBg(false);
+                // Trigger Image Editor immediately after selection
+                setShowImageEditor(true);
                 setShowPhotoChoiceModal(false);
             };
             reader.readAsDataURL(file);
@@ -405,7 +441,7 @@ const PlayerStatsScreen = () => {
             };
 
             let dataUrl = '';
-            let filename = `amaplay-card-${name.toLowerCase().replace(/\s/g, '-')}`;
+            let filename = `amafut-card-${name.toLowerCase().replace(/\s/g, '-')}`;
 
             if (exportFormat === 'svg') {
                 dataUrl = await htmlToImage.toSvg(cardRef.current, options);
@@ -433,8 +469,8 @@ const PlayerStatsScreen = () => {
                     if (navigator.canShare && navigator.canShare({ files: [file] })) {
                         await navigator.share({
                             files: [file],
-                            title: 'Meu Card AmaPlay',
-                            text: `Confira meu card oficial do AmaPlay! OVR: ${myOverall}`
+                            title: 'Meu Card AmaFut',
+                            text: `Confira meu card oficial do AmaFut! OVR: ${myOverall}`
                         });
                     } else {
                         alert("Seu dispositivo não suporta compartilhamento direto deste arquivo.");
@@ -455,64 +491,43 @@ const PlayerStatsScreen = () => {
 
     // --- Rating Logic ---
     const openRatingFor = (id: number | string) => {
+        const targetId = id === 'self' ? userId : id;
         setRatingTargetId(id);
-        setTempRating({ pace: 70, shooting: 70, passing: 70, dribbling: 70, defending: 70, physical: 70 });
+
+        // Pre-fill with existing vote or default 50
+        const existingVote = myCastedVotes[targetId as string];
+        if (existingVote) {
+            setTempRating(existingVote);
+        } else {
+            setTempRating({ pace: 50, shooting: 50, passing: 50, dribbling: 50, defending: 50, physical: 50 });
+        }
     };
 
-    const submitRating = () => {
+    const submitRating = async () => {
         if (ratingTargetId === null) return;
+        const targetId = ratingTargetId === 'self' ? userId : ratingTargetId;
 
-        if (ratingTargetId === 'self') {
-            // Update Self Stats
-            const newCount = myVoteCount + 1;
-            const newStats = {
-                pace: Math.round(((myStats.pace * myVoteCount) + tempRating.pace) / newCount),
-                shooting: Math.round(((myStats.shooting * myVoteCount) + tempRating.shooting) / newCount),
-                passing: Math.round(((myStats.passing * myVoteCount) + tempRating.passing) / newCount),
-                dribbling: Math.round(((myStats.dribbling * myVoteCount) + tempRating.dribbling) / newCount),
-                defending: Math.round(((myStats.defending * myVoteCount) + tempRating.defending) / newCount),
-                physical: Math.round(((myStats.physical * myVoteCount) + tempRating.physical) / newCount),
-            };
-            setMyStats(newStats);
-            setMyVoteCount(newCount);
-            setHasVotedSelf(true);
+        try {
+            await dataService.voting.cast(targetId as string, tempRating);
 
-            // Persist to database
-            setStats(newStats).catch(console.error);
+            // Refresh local data to show new averages
+            await loadTeammates();
 
-        } else {
-            // Update Teammate
-            setTeammates(prev => prev.map(tm => {
-                if (tm.id === ratingTargetId) {
-                    const newCount = tm.voteCount + 1;
-                    const newStats = {
-                        pace: Math.round(((tm.stats.pace * tm.voteCount) + tempRating.pace) / newCount),
-                        shooting: Math.round(((tm.stats.shooting * tm.voteCount) + tempRating.shooting) / newCount),
-                        passing: Math.round(((tm.stats.passing * tm.voteCount) + tempRating.passing) / newCount),
-                        dribbling: Math.round(((tm.stats.dribbling * tm.voteCount) + tempRating.dribbling) / newCount),
-                        defending: Math.round(((tm.stats.defending * tm.voteCount) + tempRating.defending) / newCount),
-                        physical: Math.round(((tm.stats.physical * tm.voteCount) + tempRating.physical) / newCount),
-                    };
-
-                    // Persist to DB
-                    dataService.players.save({
-                        id: tm.id,
-                        voteCount: newCount,
-                        hasVoted: true,
-                        stats: newStats
-                    }).catch(console.error);
-
-                    return {
-                        ...tm,
-                        hasVoted: true,
-                        voteCount: newCount,
-                        stats: newStats
-                    };
+            // If voting for self, also refresh the local user state
+            if (ratingTargetId === 'self') {
+                // The trigger updates the DB, but we might need to refresh the context or local state
+                // Since UserContext likely has a listener or we can just fetch again
+                const updatedProfile = await dataService.players.getById(userId!);
+                if (updatedProfile) {
+                    setMyStats(updatedProfile.stats);
                 }
-                return tm;
-            }));
+            }
+
+            setRatingTargetId(null);
+        } catch (e) {
+            console.error("Error casting vote", e);
+            alert("Erro ao enviar voto");
         }
-        setRatingTargetId(null);
     };
 
     const getFlagUrl = (code: string) => `https://flagcdn.com/w160/${code}.png`;
@@ -695,62 +710,51 @@ const PlayerStatsScreen = () => {
                             Ajustar Imagem
                         </h3>
 
-                        <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className="space-y-4 mb-6">
+                            {/* Re-open Editor Button */}
                             <button
                                 onClick={() => fileInputRef.current?.click()}
-                                className="py-3 bg-white/5 border border-white/10 rounded-xl text-slate-300 hover:bg-white/10 text-xs font-bold flex flex-col items-center gap-1"
+                                className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-slate-300 hover:bg-white/10 text-xs font-bold flex items-center justify-center gap-2"
                             >
-                                <span className="material-symbols-outlined text-xl">add_a_photo</span>
-                                Trocar Foto
+                                <span className="material-symbols-outlined text-lg">crop</span>
+                                Escolher Nova Foto / Recortar
                             </button>
-                            <button
-                                onClick={handleRemoveBg}
-                                disabled={isProcessingBg}
-                                className={`py-3 border rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-colors ${removeBg ? 'bg-primary/20 border-primary text-primary' : 'bg-white/5 border-white/10 text-slate-300'}`}
-                            >
-                                {isProcessingBg ? (
-                                    <span className="material-symbols-outlined text-xl animate-spin">progress_activity</span>
-                                ) : (
-                                    <span className="material-symbols-outlined text-xl">magic_button</span>
-                                )}
-                                Recortar Fundo (IA)
-                            </button>
-                        </div>
 
-                        <div className="space-y-4 mb-6">
                             <div className="space-y-1">
                                 <div className="flex justify-between text-xs text-slate-400 font-bold uppercase">
-                                    <span>Zoom</span>
+                                    <span>Zoom (Ajuste Fino)</span>
                                     <span>{(imgScale * 100).toFixed(0)}%</span>
                                 </div>
                                 <input
-                                    type="range" min="0.5" max="3" step="0.1"
+                                    type="range" min="0.5" max="3" step="0.05"
                                     value={imgScale}
                                     onChange={(e) => setImgScale(parseFloat(e.target.value))}
                                     className="w-full h-2 bg-black/20 rounded-lg appearance-none cursor-pointer accent-primary"
                                 />
                             </div>
 
-                            <div className="space-y-1">
+                            <div className="space-y-1 border-t border-white/5 pt-4">
                                 <div className="flex justify-between text-xs text-slate-400 font-bold uppercase">
-                                    <span>Posição Vertical</span>
+                                    <span>Ajuste Vertical</span>
+                                    <span>{imgPosY}px</span>
                                 </div>
                                 <input
-                                    type="range" min="-100" max="200" step="1"
+                                    type="range" min="-100" max="300" step="1"
                                     value={imgPosY}
-                                    onChange={(e) => setImgPosY(parseFloat(e.target.value))}
+                                    onChange={(e) => setImgPosY(parseInt(e.target.value))}
                                     className="w-full h-2 bg-black/20 rounded-lg appearance-none cursor-pointer accent-primary"
                                 />
                             </div>
 
-                            <div className="space-y-1">
+                            <div className="space-y-1 border-t border-white/5 pt-4">
                                 <div className="flex justify-between text-xs text-slate-400 font-bold uppercase">
-                                    <span>Posição Horizontal</span>
+                                    <span>Ajuste Horizontal</span>
+                                    <span>{imgPosX}px</span>
                                 </div>
                                 <input
-                                    type="range" min="-100" max="100" step="1"
+                                    type="range" min="-200" max="200" step="1"
                                     value={imgPosX}
-                                    onChange={(e) => setImgPosX(parseFloat(e.target.value))}
+                                    onChange={(e) => setImgPosX(parseInt(e.target.value))}
                                     className="w-full h-2 bg-black/20 rounded-lg appearance-none cursor-pointer accent-primary"
                                 />
                             </div>
@@ -1031,34 +1035,36 @@ const PlayerStatsScreen = () => {
                                     <p className="text-slate-400 text-sm mb-4">Escolha um jogador para compor o Overall:</p>
                                     <div className="flex flex-col gap-3">
                                         {/* Self Rating Item */}
-                                        <div key="self" className="flex items-center gap-4 bg-background-dark p-3 rounded-2xl border border-white/5 hover:border-primary/30 transition-colors">
-                                            <img src={localAvatar || 'https://i.pravatar.cc/150?u=me'} alt="Você" className="size-12 rounded-full border-2 border-primary/20 object-cover" />
-                                            <div className="flex-1">
-                                                <h4 className="text-white font-bold">{name} (Você)</h4>
-                                                <div className="flex items-center gap-2 mt-0.5">
-                                                    <span className="text-[10px] bg-white/10 text-slate-300 px-1.5 py-0.5 rounded uppercase font-bold">{displayPos}</span>
-                                                    <span className="text-xs text-primary font-bold">OVR {myOverall}</span>
+                                        {localAvatar && (
+                                            <div key="self" className="flex items-center gap-4 bg-background-dark p-3 rounded-2xl border border-white/5 hover:border-primary/30 transition-colors">
+                                                <img src={localAvatar} alt="Você" className="size-12 rounded-full border-2 border-primary/20 object-cover" />
+                                                <div className="flex-1">
+                                                    <h4 className="text-white font-bold">{name} (Você)</h4>
+                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                        <span className="text-[10px] bg-white/10 text-slate-300 px-1.5 py-0.5 rounded uppercase font-bold">{displayPos}</span>
+                                                        <span className="text-xs text-primary font-bold">OVR {myOverall}</span>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            {hasVotedSelf ? (
-                                                <div className="flex items-center gap-3">
-                                                    <span className="material-symbols-outlined text-primary text-xl">check_circle</span>
+                                                {myCastedVotes[userId as string] ? (
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="material-symbols-outlined text-primary text-xl">check_circle</span>
+                                                        <button
+                                                            onClick={() => openRatingFor('self')}
+                                                            className="text-xs font-bold text-slate-400 hover:text-white underline"
+                                                        >
+                                                            Editar
+                                                        </button>
+                                                    </div>
+                                                ) : (
                                                     <button
                                                         onClick={() => openRatingFor('self')}
-                                                        className="text-xs font-bold text-slate-400 hover:text-white underline"
+                                                        className="px-4 py-2 bg-primary/10 text-primary rounded-lg text-sm font-bold hover:bg-primary hover:text-background-dark transition-colors"
                                                     >
-                                                        Editar
+                                                        Avaliar
                                                     </button>
-                                                </div>
-                                            ) : (
-                                                <button
-                                                    onClick={() => openRatingFor('self')}
-                                                    className="px-4 py-2 bg-primary/10 text-primary rounded-lg text-sm font-bold hover:bg-primary hover:text-background-dark transition-colors"
-                                                >
-                                                    Avaliar
-                                                </button>
-                                            )}
-                                        </div>
+                                                )}
+                                            </div>
+                                        )}
 
                                         {teammates.map((tm) => (
                                             <div key={tm.id} className="flex items-center gap-4 bg-background-dark p-3 rounded-2xl border border-white/5 hover:border-primary/30 transition-colors">
@@ -1072,7 +1078,7 @@ const PlayerStatsScreen = () => {
                                                     </div>
                                                 </div>
 
-                                                {tm.hasVoted ? (
+                                                {myCastedVotes[tm.id] ? (
                                                     <div className="flex items-center gap-3">
                                                         <span className="material-symbols-outlined text-primary text-xl">check_circle</span>
                                                         <button
@@ -1149,6 +1155,16 @@ const PlayerStatsScreen = () => {
                 </div>
             )}
 
+            {/* Image Editor Modal */}
+            {showImageEditor && originalImage && (
+                <ImageEditor
+                    imageSrc={originalImage}
+                    onSave={handleSaveImage}
+                    onCancel={() => setShowImageEditor(false)}
+                    aspectRatio={0.7} // Portrait for Card
+                    allowBackgroundRemoval={true}
+                />
+            )}
         </div>
     );
 };

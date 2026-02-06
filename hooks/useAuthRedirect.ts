@@ -5,7 +5,7 @@ import { useUser } from '../contexts/UserContext';
 /**
  * useAuthRedirect Hook
  * 
- * Implements "Smart Routing" logic for the AmaPlay application.
+ * Implements "Smart Routing" logic for the AmaFut application.
  * Ensures users are always on the correct page based on their profile data and lifecycle state.
  */
 export const useAuthRedirect = () => {
@@ -16,10 +16,11 @@ export const useAuthRedirect = () => {
         isInitialized,
         role,
         name,
+        avatar,
         position,
-        status,
-        isFirstManager, // 🔑 Crucial for determining first team creator
-        isSetupComplete // 🔑 CRITICAL: Use DB flag instead of manual calculation
+        isApproved,
+        isFirstManager, // 🔑 Crucial for determinar o primeiro criador do time
+        isSetupComplete // 🔑 CRITICAL: Use a flag do banco em vez de cálculo manual
     } = useUser();
 
     const navigate = useNavigate();
@@ -34,12 +35,10 @@ export const useAuthRedirect = () => {
     }, [location.pathname, navigate]);
 
     useEffect(() => {
-        // 1. GUARD: Only run once initialized
-        if (!isInitialized) {
-            return;
-        }
+        // 0. Aguarda inicialização
+        if (!isInitialized) return;
 
-        // 2. GUARD: No user logged in → Login Screen (unless already on a public page)
+        // 1. Logado?
         if (!userId) {
             const publicRoutes = ['/', '/register-account', '/forgot-password', '/reset-password'];
             if (!publicRoutes.includes(location.pathname)) {
@@ -48,100 +47,80 @@ export const useAuthRedirect = () => {
             return;
         }
 
-        // 3. FLOWCHART-BASED NAVIGATION LOGIC
-
         const currentPath = location.pathname;
-
-        // ✅ Use DB flag instead of manual calculation
-        const hasSetupComplete = isSetupComplete;
-
         let idealPath = '';
 
-        // ONBOARDING FLOW (Setup NOT complete)
-        if (!hasSetupComplete) {
-            // Step 1: Selecionar Função
-            if (!intendedRole) {
-                idealPath = '/register-role';
+        // 📊 ANÁLISE PROFUNDA DO PERFIL (Para suportar usuários novos e antigos)
+
+        // A. Tem Função Definida? (Ignora 'authenticated' padrão do supabase)
+        // const hasRole = (role && role !== 'authenticated') && role !== 'player' || (intendedRole && intendedRole !== 'authenticated');
+
+        // B. Tem Time?
+        const hasTeam = !!teamId;
+
+        // C. Tem Dados de Perfil? (Consideramos "Completo" se tiver Nome real, Posição e Foto)
+        const hasProfileData =
+            (name && name !== 'Visitante') &&
+            !!position &&
+            !!avatar;
+
+        // D. Setup está marcado como completo no banco?
+        const isOfficiallyComplete = isSetupComplete;
+
+        // E. Tem papel válido?
+        const validRole = (role && role !== 'authenticated') || (intendedRole && intendedRole !== 'authenticated');
+
+        // 🚀 DECISÃO DE ROTEAMENTO
+
+        // CASO 1: USUÁRIO COMPLETO (Oficial ou Legado)
+        // Se tiver tudo preenchido OU a flag oficial true, vai pro Dashboard.
+        if (isOfficiallyComplete || (validRole && hasTeam && hasProfileData)) {
+            // Define o destino final
+            const dashboardTarget = (isApproved || isFirstManager) ? '/dashboard' : '/pre-dash';
+
+            // Se tentar ir para a raiz, manda pro dashboard
+            if (currentPath === '/') {
+                navigateTo(dashboardTarget);
+                return;
             }
-            // Step 2: Criar/Buscar Time
-            else if (!teamId) {
-                idealPath = '/register-team';
+
+            // Bloqueia volta para onboarding
+            const onboardingRoutes = ['/register-role', '/register-team', '/register-privacy', '/register-profile'];
+            if (onboardingRoutes.includes(currentPath)) {
+                navigateTo(dashboardTarget);
             }
-            // Step 3: Privacidade (MANDATORY after team)
-            // Se já tem time, OBRIGATORIAMENTE vai para privacidade antes do perfil
-            // A única e xceção é se ele já ESTIVER na tela de privacidade ou perfil (mas perfil só se já passou pela privacidade logicamente, o que controlaremos pelo clique do botão)
-            else if (currentPath === '/register-privacy') {
-                idealPath = '/register-privacy';
-            }
-            // Se está tentando ir para o perfil mas não passou pela privacidade (ainda amarrado via navegação do botão)
-            // Vamos forçar privacidade como o próximo passo lógico se ele não estiver no perfil
-            else if (currentPath !== '/register-profile') {
-                idealPath = '/register-privacy';
-            }
-            // Step 4: Dados do Atleta (Se chegou aqui, já tem role, team e passou pela privacidade)
-            else {
+            return;
+        }
+
+        // CASO 2: USUÁRIO INCOMPLETO (Fluxo Sequencial)
+
+        // Etapa 1: Função
+        if (!validRole) {
+            idealPath = '/register-role';
+        }
+        // Etapa 2: Time
+        else if (!hasTeam) {
+            idealPath = '/register-team';
+        }
+        // Etapa 3: Dados Finais (Privacidade -> Perfil)
+        else {
+            if (currentPath === '/register-profile') {
                 idealPath = '/register-profile';
+            } else {
+                idealPath = '/register-privacy';
             }
         }
 
-
-        // SETUP COMPLETE - Verificar Status
-        if (hasSetupComplete) {
-            // 🔑 REGRA CRÍTICA DO FLUXOGRAMA:
-            // - Primeiro Pres/Vice que CRIA o time (isFirstManager=true) → Dashboard direto
-            // - Todos os demais (mesmo Pres/Vice que ENTRAM depois) → Pre-Dash até aprovação
-
-            if (status === 'approved' || isFirstManager) {
-                // Aprovado OU primeiro gestor que criou o time
-                idealPath = '/dashboard';
-            }
-            else if (status === 'pending') {
-                // Aguardando aprovação (Admin/Jogador ou Pres/Vice que entrou depois)
-                idealPath = '/pre-dash';
-            }
-            // Fallback
-            else {
-                idealPath = '/dashboard';
-            }
-        }
-
-        // Exception: Allow /player-stats for authenticated users
+        // Exceção: Permitir visualização de stats para autenticados
         if (currentPath === '/player-stats') return;
 
-        // FORCED REDIRECTIONS
-        const onboardingRoutes = ['/register-role', '/register-team', '/register-privacy', '/register-profile', '/pre-dash'];
-        const isAtOnboarding = onboardingRoutes.includes(currentPath);
-
-        // Scenario A: User on login page while authenticated
-        if (currentPath === '/') {
-            navigateTo(idealPath);
-            return;
-        }
-
-        // Scenario B: User on dashboard but should be elsewhere
-        if (currentPath === '/dashboard' && idealPath !== '/dashboard') {
-            navigateTo(idealPath);
-            return;
-        }
-
-        // Scenario C: User on wrong onboarding step
-        if (isAtOnboarding && currentPath !== idealPath && idealPath !== '') {
-            // Exception: Allow register-privacy as valid if that's current path
-            // (don't bounce between privacy and profile)
-            if (currentPath === '/register-privacy' && idealPath === '/register-profile') {
-                return; // Stay on privacy, user hasn't clicked continue yet
-            }
-
+        // Executar redirecionamento se necessário
+        if (idealPath && currentPath !== idealPath) {
+            if (currentPath === '/register-privacy' && idealPath === '/register-profile') return;
             navigateTo(idealPath);
         }
 
-        // Scenario D: User finished setup but lingering in onboarding
-        if (hasSetupComplete && isAtOnboarding) {
-            navigateTo(idealPath);
-        }
-
-    }, [userId, teamId, intendedRole, isInitialized, location.pathname, navigateTo, role, name, position, status, isFirstManager, isSetupComplete]);
-
+    }, [userId, role, intendedRole, teamId, name, position, avatar, isSetupComplete, isApproved, isFirstManager, location.pathname, navigateTo]);
 
     return { isRedirecting };
 };

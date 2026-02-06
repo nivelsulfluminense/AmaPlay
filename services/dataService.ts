@@ -9,8 +9,13 @@ export interface LegacyTransaction {
     description: string;
     category: string;
     date: string;
-    status: 'paid' | 'pending';
+    status: 'paid' | 'pending' | 'rejected';
     createdAt: string;
+    referenceMonth?: number;
+    referenceYear?: number;
+    chargeId?: string;
+    targetUserId?: string;
+    createdByName?: string;
 }
 
 export interface LegacyInventoryItem {
@@ -22,7 +27,30 @@ export interface LegacyInventoryItem {
     status: 'excellent' | 'good' | 'fair' | 'poor';
     image?: string;
     color?: string;
+    responsibleId?: string | null;
     createdAt: string;
+}
+
+export interface Charge {
+    id: string;
+    teamId: string;
+    creatorId: string;
+    title: string;
+    amount: number;
+    type: 'monthly' | 'extra';
+    createdAt: string;
+}
+
+export interface ReceiverAccount {
+    id?: string;
+    teamId?: string;
+    ownerName: string;
+    documentNumber: string;
+    agency: string;
+    accountNumber: string;
+    institution: string;
+    accountType: string;
+    pixKey: string;
 }
 
 export interface PlayerStats {
@@ -30,8 +58,23 @@ export interface PlayerStats {
     shooting: number;
     passing: number;
     dribbling: number;
-    defending: number;
+    defending?: number;
     physical: number;
+}
+
+export interface ScoringStats {
+    lastGameScore: number;
+    annualAverage: number;
+    matchesCount: number;
+}
+
+export interface MatchRating {
+    id: string;
+    eventId: string;
+    voterId: string;
+    playerId: string;
+    rating: number;
+    createdAt: string;
 }
 
 export interface Player {
@@ -135,7 +178,7 @@ export const dataService = {
                 .from('profiles')
                 .select('*')
                 .eq('team_id', profile.team_id)
-                .eq('status', 'pending');
+                .eq('is_approved', false);
 
             const { data, error } = await query;
             if (error) return [];
@@ -177,7 +220,7 @@ export const dataService = {
             }
 
             // Convert to legacy format
-            return (data || []).map((t: Transaction) => ({
+            return (data || []).map((t: any) => ({
                 id: parseInt(t.id.replace(/-/g, '').slice(0, 10), 16),
                 type: t.type,
                 amount: Number(t.amount),
@@ -185,11 +228,16 @@ export const dataService = {
                 category: t.category,
                 date: t.transaction_date,
                 status: t.status,
-                createdAt: t.created_at
+                createdAt: t.created_at,
+                referenceMonth: t.reference_month,
+                referenceYear: t.reference_year,
+                chargeId: t.charge_id,
+                targetUserId: t.target_user_id,
+                createdByName: t.created_by_name
             }));
         },
 
-        add: async (transaction: Omit<LegacyTransaction, 'id' | 'createdAt'>): Promise<LegacyTransaction> => {
+        add: async (transaction: Omit<LegacyTransaction, 'id' | 'createdAt'> & { proof_url?: string }): Promise<LegacyTransaction> => {
             const { data: { user } } = await supabase.auth.getUser();
             const teamId = await getCurrentTeamId();
 
@@ -203,7 +251,13 @@ export const dataService = {
                     transaction_date: transaction.date,
                     status: transaction.status,
                     team_id: teamId,
-                    creator_id: user?.id
+                    creator_id: user?.id,
+                    proof_url: transaction.proof_url,
+                    reference_month: transaction.referenceMonth,
+                    reference_year: transaction.referenceYear,
+                    charge_id: transaction.chargeId,
+                    target_user_id: transaction.targetUserId,
+                    created_by_name: transaction.createdByName
                 })
                 .select()
                 .single();
@@ -220,8 +274,108 @@ export const dataService = {
                 category: data.category,
                 date: data.transaction_date,
                 status: data.status,
-                createdAt: data.created_at
+                createdAt: data.created_at,
+                referenceMonth: data.reference_month,
+                referenceYear: data.reference_year,
+                chargeId: data.charge_id,
+                targetUserId: data.target_user_id,
+                createdByName: data.created_by_name
             };
+        },
+
+        charges: {
+            list: async (): Promise<Charge[]> => {
+                const teamId = await getCurrentTeamId();
+                if (!teamId) return [];
+
+                const { data, error } = await supabase
+                    .from('charges')
+                    .select('*')
+                    .eq('team_id', teamId)
+                    .order('created_at', { ascending: false });
+
+                if (error) return [];
+
+                return (data || []).map(c => ({
+                    id: c.id,
+                    teamId: c.team_id,
+                    creatorId: c.creator_id,
+                    title: c.title,
+                    amount: Number(c.amount),
+                    type: c.type,
+                    createdAt: c.created_at
+                }));
+            },
+
+            add: async (charge: Omit<Charge, 'id' | 'teamId' | 'creatorId' | 'createdAt'>): Promise<Charge> => {
+                const { data: { user } } = await supabase.auth.getUser();
+                const teamId = await getCurrentTeamId();
+
+                const { data, error } = await supabase
+                    .from('charges')
+                    .insert({
+                        title: charge.title,
+                        amount: charge.amount,
+                        type: charge.type,
+                        team_id: teamId,
+                        creator_id: user?.id
+                    })
+                    .select()
+                    .single();
+
+                if (error) throw new Error(error.message);
+
+                return {
+                    id: data.id,
+                    teamId: data.team_id,
+                    creatorId: data.creator_id,
+                    title: data.title,
+                    amount: Number(data.amount),
+                    type: data.type,
+                    createdAt: data.created_at
+                };
+            }
+        },
+
+        receiver: {
+            get: async (): Promise<ReceiverAccount | null> => {
+                const teamId = await getCurrentTeamId();
+                if (!teamId) return null;
+                const { data, error } = await supabase
+                    .from('receiver_accounts')
+                    .select('*')
+                    .eq('team_id', teamId)
+                    .maybeSingle();
+                if (error || !data) return null;
+                return {
+                    id: data.id,
+                    teamId: data.team_id,
+                    ownerName: data.owner_name,
+                    documentNumber: data.document_number,
+                    agency: data.agency,
+                    accountNumber: data.account_number,
+                    institution: data.institution,
+                    accountType: data.account_type,
+                    pixKey: data.pix_key
+                };
+            },
+            update: async (details: ReceiverAccount): Promise<void> => {
+                const teamId = await getCurrentTeamId();
+                const { error } = await supabase
+                    .from('receiver_accounts')
+                    .upsert({
+                        team_id: teamId,
+                        owner_name: details.ownerName,
+                        document_number: details.documentNumber,
+                        agency: details.agency,
+                        account_number: details.accountNumber,
+                        institution: details.institution,
+                        account_type: details.accountType,
+                        pix_key: details.pixKey,
+                        updated_at: new Date().toISOString()
+                    });
+                if (error) throw error;
+            }
         },
 
         updateStatus: async (id: number, status: 'paid' | 'pending' | 'rejected'): Promise<void> => {
@@ -229,7 +383,8 @@ export const dataService = {
             const { data: transactions } = await supabase
                 .from('transactions')
                 .select('id')
-                .limit(100);
+                .order('created_at', { ascending: false })
+                .limit(1000);
 
             const transaction = transactions?.find(t =>
                 parseInt(t.id.replace(/-/g, '').slice(0, 10), 16) === id
@@ -253,7 +408,8 @@ export const dataService = {
             const { data: transactions } = await supabase
                 .from('transactions')
                 .select('id')
-                .limit(100);
+                .order('created_at', { ascending: false })
+                .limit(1000);
 
             const transaction = transactions?.find(t =>
                 parseInt(t.id.replace(/-/g, '').slice(0, 10), 16) === id
@@ -265,6 +421,42 @@ export const dataService = {
                     .delete()
                     .eq('id', transaction.id);
             }
+        },
+
+        getSettings: async () => {
+            const teamId = await getCurrentTeamId();
+            if (!teamId) return null;
+
+            const { data, error } = await supabase
+                .from('teams')
+                .select('monthly_fee_amount, due_day, launch_day, fee_start_date')
+                .eq('id', teamId)
+                .single();
+
+            if (error) return null;
+            return {
+                monthlyFee: Number(data.monthly_fee_amount),
+                dueDay: data.due_day,
+                launchDay: data.launch_day,
+                feeStartDate: data.fee_start_date
+            };
+        },
+
+        updateSettings: async (settings: { monthlyFee?: number, dueDay?: number, launchDay?: number, feeStartDate?: string }) => {
+            const teamId = await getCurrentTeamId();
+            if (!teamId) throw new Error('No team');
+
+            const { error } = await supabase
+                .from('teams')
+                .update({
+                    monthly_fee_amount: settings.monthlyFee,
+                    due_day: settings.dueDay,
+                    launch_day: settings.launchDay,
+                    fee_start_date: settings.feeStartDate
+                })
+                .eq('id', teamId);
+
+            if (error) throw error;
         }
     },
 
@@ -297,6 +489,7 @@ export const dataService = {
                 status: item.status,
                 image: item.image || undefined,
                 color: item.color || undefined,
+                responsibleId: item.responsible_id,
                 createdAt: item.created_at
             }));
         },
@@ -326,7 +519,8 @@ export const dataService = {
                             max_quantity: item.maxQuantity,
                             status: item.status,
                             image: item.image,
-                            color: item.color
+                            color: item.color,
+                            responsible_id: item.responsibleId
                         })
                         .eq('id', existingItem.id)
                         .select()
@@ -343,6 +537,7 @@ export const dataService = {
                         status: data.status,
                         image: data.image || undefined,
                         color: data.color || undefined,
+                        responsibleId: data.responsible_id,
                         createdAt: data.created_at
                     };
                 }
@@ -360,7 +555,8 @@ export const dataService = {
                     image: item.image,
                     color: item.color,
                     team_id: teamId,
-                    creator_id: user?.id
+                    creator_id: user?.id,
+                    responsible_id: item.responsibleId
                 })
                 .select()
                 .single();
@@ -376,6 +572,7 @@ export const dataService = {
                 status: data.status,
                 image: data.image || undefined,
                 color: data.color || undefined,
+                responsibleId: data.responsible_id,
                 createdAt: data.created_at
             };
         },
@@ -399,18 +596,145 @@ export const dataService = {
         }
     },
 
+    voting: {
+        cast: async (targetId: string, stats: any) => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('User not authenticated');
+
+            const { error } = await supabase
+                .from('player_votes')
+                .upsert({
+                    voter_id: user.id,
+                    target_id: targetId,
+                    ...stats,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'voter_id,target_id' });
+
+            if (error) throw error;
+        },
+
+        getMyVote: async (targetId: string) => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return null;
+
+            const { data, error } = await supabase
+                .from('player_votes')
+                .select('*')
+                .eq('voter_id', user.id)
+                .eq('target_id', targetId)
+                .single();
+
+            if (error || !data) return null;
+            return {
+                pace: data.pace,
+                shooting: data.shooting,
+                passing: data.passing,
+                dribbling: data.dribbling,
+                defending: data.defending,
+                physical: data.physical
+            };
+        }
+    },
+
+    scoring: {
+        getMatchRatings: async (eventId: string): Promise<MatchRating[]> => {
+            const { data, error } = await supabase
+                .from('match_ratings')
+                .select('*')
+                .eq('event_id', eventId);
+
+            if (error) return [];
+
+            return data.map((r: any) => ({
+                id: r.id,
+                eventId: r.event_id,
+                voterId: r.voter_id,
+                playerId: r.player_id,
+                rating: Number(r.rating),
+                createdAt: r.created_at
+            }));
+        },
+
+        submitRating: async (eventId: string, playerId: string, rating: number) => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('User not authenticated');
+
+            const { error } = await supabase
+                .from('match_ratings')
+                .upsert({
+                    event_id: eventId,
+                    voter_id: user.id,
+                    player_id: playerId,
+                    rating: rating
+                }, { onConflict: 'event_id,voter_id,player_id' });
+
+            if (error) throw error;
+        },
+
+        getMyStats: async (): Promise<ScoringStats> => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return { lastGameScore: 0, annualAverage: 0, matchesCount: 0 };
+
+            const { data: ratings } = await supabase
+                .from('match_ratings')
+                .select('rating, event_id, events(event_date)')
+                .eq('player_id', user.id);
+
+            if (!ratings || ratings.length === 0) return { lastGameScore: 0, annualAverage: 0, matchesCount: 0 };
+
+            const ratingsByEvent: Record<string, number[]> = {};
+            ratings.forEach((r: any) => {
+                if (!ratingsByEvent[r.event_id]) ratingsByEvent[r.event_id] = [];
+                ratingsByEvent[r.event_id].push(Number(r.rating));
+            });
+
+            const gameScores: number[] = Object.values(ratingsByEvent).map(votes => {
+                const sum = votes.reduce((a, b) => a + b, 0);
+                return sum / votes.length;
+            });
+
+            const totalSum = gameScores.reduce((a, b) => a + b, 0);
+            const annualAverage = gameScores.length > 0 ? totalSum / gameScores.length : 0;
+
+            const sortedRatings = [...ratings].sort((a: any, b: any) => {
+                const dateA = a.events?.event_date || '';
+                const dateB = b.events?.event_date || '';
+                return dateB.localeCompare(dateA);
+            });
+
+            let lastGameScore = 0;
+            if (sortedRatings.length > 0) {
+                const lastEventId = sortedRatings[0].event_id;
+                const lastGameVotes = ratingsByEvent[lastEventId];
+                const sum = lastGameVotes.reduce((a, b) => a + b, 0);
+                lastGameScore = sum / lastGameVotes.length;
+            }
+
+            return {
+                lastGameScore: Number(lastGameScore.toFixed(1)),
+                annualAverage: Number(annualAverage.toFixed(1)),
+                matchesCount: gameScores.length
+            };
+        }
+    },
+
     players: {
-        list: async (): Promise<Player[]> => {
-            const teamId = await getCurrentTeamId();
+        list: async (includeIncomplete: boolean = false, forcedTeamId?: string): Promise<Player[]> => {
+            const teamId = forcedTeamId || await getCurrentTeamId();
 
             let query = supabase
                 .from('profiles')
                 .select('*')
-                .not('position', 'is', null)
-                .order('created_at', { ascending: false });
+                .order('name', { ascending: true });
+
+            if (!includeIncomplete) {
+                query = query.not('position', 'is', null);
+            }
 
             if (teamId) {
-                query = query.eq('team_id', teamId).eq('status', 'approved');
+                // Suporta tanto o padrão novo (status='approved') quanto o legado (is_approved=true)
+                // Usamos eq(team_id) e o or(status/is_approved)
+                query = query.eq('team_id', teamId).or('status.eq.approved,is_approved.eq.true,role.eq.presidente,role.eq.vice-presidente');
             }
 
             const { data, error } = await query;
@@ -677,13 +1001,17 @@ export const dataService = {
 
             // Automatically confirm the creator
             if (user) {
-                await supabase
+                const { error: confirmError } = await supabase
                     .from('event_participants')
                     .upsert({
                         event_id: data.id,
                         user_id: user.id,
                         status: 'confirmed'
                     });
+
+                if (confirmError) {
+                    console.error('Error auto-confirming creator:', confirmError);
+                }
             }
 
             return {
@@ -773,25 +1101,10 @@ export const dataService = {
                 realId = found.id;
             }
 
-            const { data: event } = await supabase
-                .from('events')
-                .select('confirmed_count')
-                .eq('id', realId)
-                .single();
-
-            if (!event) throw new Error('Evento não encontrado');
-
-            const { data: existing } = await supabase
-                .from('event_participants')
-                .select('*')
-                .eq('event_id', realId)
-                .eq('user_id', user.id)
-                .maybeSingle();
-
-            const wasConfirmed = existing?.status === 'confirmed';
-            const willBeConfirmed = status === 'confirmed';
-
-            await supabase
+            // Upsert only the participant status. 
+            // The 'confirmed_count' in the 'events' table is now updated automatically 
+            // by a database trigger (tr_refresh_confirmed_count).
+            const { error: upsertError } = await supabase
                 .from('event_participants')
                 .upsert({
                     event_id: realId,
@@ -801,32 +1114,52 @@ export const dataService = {
                     onConflict: 'event_id,user_id'
                 });
 
-            let newCount = event.confirmed_count || 0;
-            if (!wasConfirmed && willBeConfirmed) newCount++;
-            if (wasConfirmed && !willBeConfirmed) newCount--;
-
-            await supabase
-                .from('events')
-                .update({ confirmed_count: Math.max(0, newCount) })
-                .eq('id', realId);
+            if (upsertError) {
+                console.error('Erro ao atualizar status do participante:', upsertError);
+                throw new Error('Erro ao atualizar presença: ' + upsertError.message);
+            }
         },
 
-        delete: async (id: number): Promise<void> => {
-            const { data: events } = await supabase
-                .from('events')
-                .select('id')
-                .limit(100);
-
-            const event = events?.find(e =>
-                parseInt(e.id.replace(/-/g, '').slice(0, 10), 16) === id
-            );
-
-            if (event) {
-                await supabase
-                    .from('events')
-                    .delete()
-                    .eq('id', event.id);
+        update: async (id: number | string, updates: Partial<LegacyGameEvent>): Promise<void> => {
+            let realId = id;
+            if (typeof id === 'number') {
+                const { data: events } = await supabase.from('events').select('id').limit(100);
+                const found = events?.find(e => parseInt(e.id.replace(/-/g, '').slice(0, 10), 16) === id);
+                if (!found) throw new Error('Evento não encontrado');
+                realId = found.id;
             }
+
+            const { error } = await supabase
+                .from('events')
+                .update({
+                    type: updates.type,
+                    title: updates.title,
+                    opponent: updates.opponent,
+                    event_date: updates.date,
+                    event_time: updates.time,
+                    location: updates.location,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', realId);
+
+            if (error) throw error;
+        },
+
+        delete: async (id: number | string): Promise<void> => {
+            let realId = id;
+            if (typeof id === 'number') {
+                const { data: events } = await supabase.from('events').select('id').limit(100);
+                const found = events?.find(e => parseInt(e.id.replace(/-/g, '').slice(0, 10), 16) === id);
+                if (!found) return;
+                realId = found.id;
+            }
+
+            const { error } = await supabase
+                .from('events')
+                .delete()
+                .eq('id', realId);
+
+            if (error) throw error;
         }
     },
 
@@ -969,6 +1302,115 @@ export const dataService = {
         seed: async (_initialTeams: CustomTeam[]) => {
             // No-op for Supabase
             console.log('Seeding not needed with Supabase');
+        }
+    },
+    scouts: {
+        async save(eventId: string, stats: any) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error("No user");
+
+            const { data: existing } = await supabase
+                .from('match_scouts')
+                .select('id')
+                .eq('event_id', eventId)
+                .eq('player_id', user.id)
+                .single();
+
+            if (existing) {
+                return await supabase
+                    .from('match_scouts')
+                    .update({ stats, status: 'pending', updated_at: new Date().toISOString() })
+                    .eq('id', existing.id);
+            } else {
+                return await supabase
+                    .from('match_scouts')
+                    .insert({
+                        event_id: eventId,
+                        player_id: user.id,
+                        stats,
+                        status: 'pending'
+                    });
+            }
+        },
+
+        async getMyScout(eventId: string) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return null;
+
+            const { data } = await supabase
+                .from('match_scouts')
+                .select('*, match_scout_validations(validator_id, action)')
+                .eq('event_id', eventId)
+                .eq('player_id', user.id)
+                .single();
+            return data;
+        },
+
+        async listByEvent(eventId: string) {
+            const { data } = await supabase
+                .from('match_scouts')
+                .select('*, profiles:player_id(name, avatar, is_pro), match_scout_validations(validator_id, action, contest_data)')
+                .eq('event_id', eventId);
+            return data || [];
+        },
+
+        async validate(scoutId: string, action: 'approve' | 'contest', contestData?: any) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error("No user");
+
+            // Check previous validation
+            const { error } = await supabase.from('match_scout_validations').upsert({
+                scout_id: scoutId,
+                validator_id: user.id,
+                action,
+                contest_data: contestData
+            }, { onConflict: 'scout_id, validator_id' });
+
+            if (error) throw error;
+
+            // Check if we hit 5 approvals
+            if (action === 'approve') {
+                const { count } = await supabase
+                    .from('match_scout_validations')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('scout_id', scoutId)
+                    .eq('action', 'approve');
+
+                if ((count || 0) >= 5) {
+                    await supabase.from('match_scouts').update({ status: 'approved' }).eq('id', scoutId);
+                }
+            }
+        },
+
+        async getMyValidationCount(eventId: string) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return 0;
+
+            // Get all scouts for this event NOT belonging to me, to see how many I validated
+            const { data: scouts } = await supabase
+                .from('match_scouts')
+                .select('id')
+                .eq('event_id', eventId)
+                .neq('player_id', user.id);
+
+            if (!scouts || scouts.length === 0) return 0;
+            const ids = scouts.map(s => s.id);
+
+            const { count } = await supabase
+                .from('match_scout_validations')
+                .select('*', { count: 'exact', head: true })
+                .in('scout_id', ids)
+                .eq('validator_id', user.id);
+
+            return { myCount: count || 0, totalToValidate: ids.length };
+        },
+        async getAnalytics() {
+            const { data } = await supabase
+                .from('match_scouts')
+                .select('stats, status, profiles:player_id (id, name, position), game_events:event_id (date, type)')
+                .eq('status', 'approved')
+                .order('created_at', { ascending: true });
+            return data || [];
         }
     }
 };

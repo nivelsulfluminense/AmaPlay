@@ -29,9 +29,11 @@ export interface Profile {
         city?: string;
         state?: string;
         number?: string;
+        complement?: string;
         country?: string;
     } | null;
     position: 'GOL' | 'ZAG' | 'MEI' | 'ATA' | null;
+    is_pro: boolean | null;
     stats: {
         pace: number;
         shooting: number;
@@ -46,9 +48,9 @@ export interface Profile {
     has_voted: boolean | null;
     is_public: boolean | null;
     is_setup_complete: boolean | null;
+    status: 'pending' | 'approved' | 'rejected' | null;
     is_approved: boolean | null;
     is_first_manager: boolean | null;
-    status: 'pending' | 'approved' | 'rejected';
     heart_team: string | null;
     created_at: string;
     updated_at: string | null;
@@ -119,6 +121,18 @@ export interface InventoryItem {
     color: string | null;
     team_id: string | null;
     creator_id: string | null;
+    responsible_id: string | null;
+    created_at: string;
+    updated_at: string | null;
+}
+
+// === Tabela team_members ===
+export interface TeamMemberDB {
+    id: string;
+    team_id: string;
+    profile_id: string;
+    role: 'presidente' | 'vice-presidente' | 'admin' | 'player';
+    is_team_approved: boolean;
     created_at: string;
     updated_at: string | null;
 }

@@ -200,8 +200,9 @@ const RegisterProfileScreen = () => {
 
       markSetupComplete();
 
-      // If user is already approved (e.g., first manager), go straight to Dashboard
-      if (isApproved) {
+      // If user is already approved or is a manager (President/Vice), go straight to Dashboard
+      const isManager = intendedRole === 'presidente' || intendedRole === 'vice-presidente';
+      if (isApproved || isManager) {
         navigate('/dashboard');
       } else {
         setShowSuccessModal(true);
@@ -553,7 +554,7 @@ const RegisterProfileScreen = () => {
             <h3 className="text-white text-2xl font-black mb-3 italic uppercase tracking-tight">Cadastro bem sucedido!</h3>
 
             <p className="text-slate-300 text-base leading-relaxed mb-8">
-              Entre em contato com o <span className="text-white font-bold text-primary">presidente</span> ou o <span className="text-white font-bold text-primary">vice-presidente</span> do seu time para fazer parte da família <span className="text-white font-bold">"{teamDetails.name}"</span> para desfrutar a experiência do AmaPlay.
+              Entre em contato com o <span className="text-white font-bold text-primary">presidente</span> ou o <span className="text-white font-bold text-primary">vice-presidente</span> do seu time para fazer parte da família <span className="text-white font-bold">"{teamDetails.name}"</span> para desfrutar a experiência do AmaFut.
             </p>
 
             <button
