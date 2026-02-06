@@ -6,7 +6,7 @@ import { authService } from '../services/authService';
 const ScoutsScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { name, avatar, teamId, isPro, userId } = useUser(); // Get current user info
+  const { name, avatar, teamId, isPro, userId, refreshProfile } = useUser(); // Get current user info
 
   // Detect edit mode from URL
   const isEditMode = location.search.includes('edit=true');
@@ -150,6 +150,9 @@ const ScoutsScreen = () => {
         }
       });
 
+      // 🔄 Force context refresh so navigation works smoothly
+      await refreshProfile();
+
       // 🏆 Navigate to next step
       navigate('/pro-selection');
     } catch (e: any) {
@@ -176,6 +179,14 @@ const ScoutsScreen = () => {
   const isFormValid = () => {
     return isBasicInfoComplete() && acceptRules;
   };
+
+  if (isPro && !isEditMode) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background-dark">
+        <span className="material-symbols-outlined text-primary text-4xl animate-spin">progress_activity</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full min-h-screen w-full bg-background-dark">

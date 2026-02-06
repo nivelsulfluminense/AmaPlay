@@ -59,6 +59,7 @@ const ScoutsPerformanceScreen = () => {
   // Validation Logic
   const [teamScouts, setTeamScouts] = useState<any[]>([]);
   const [validationProgress, setValidationProgress] = useState({ validated: 0, total: 0 });
+  const [expandedScoutId, setExpandedScoutId] = useState<string | null>(null);
 
   // Contest Modal
   const [contestModal, setContestModal] = useState<{ open: boolean, scout: any | null, counts: Record<string, number> }>({
@@ -91,19 +92,37 @@ const ScoutsPerformanceScreen = () => {
           const approvals = myScout.match_scout_validations?.filter((v: any) => v.action === 'approve').length || 0;
           setMyApprovalCount(approvals);
         }
+        // 3. Load All Participants of the Event
+        const participants = await dataService.events.getParticipants(String(last.id));
+        const activeParticipants = participants.filter(p => p.status === 'confirmed' && p.id !== userId);
 
-        // 3. Load Team Scouts for Validation
-        // Filter out myself and keep only those with content
+        // 4. Load Scouts and Merge
         const allScouts = await dataService.scouts.listByEvent(String(last.id));
-        const others = allScouts.filter((s: any) => s.player_id !== userId && s.stats && Object.keys(s.stats).length > 0);
-        setTeamScouts(others);
 
-        // 4. Calculate Validation Progress
-        // How many unique scouts have I validated?
+        const combined = activeParticipants.map(p => {
+          const scout = allScouts.find(s => s.player_id === p.id);
+          return {
+            ...scout,
+            id: scout?.id || `temp-${p.id}`,
+            player_id: p.id,
+            stats: scout?.stats || {},
+            status: scout?.status || 'pending',
+            profiles: {
+              name: p.name,
+              avatar: p.avatar,
+              is_pro: p.is_pro
+            },
+            hasStartedScout: !!scout && scout.stats && Object.keys(scout.stats).length > 0
+          };
+        });
+
+        setTeamScouts(combined);
+
+        // 5. Calculate Validation Progress
         const myValidations = await dataService.scouts.getMyValidationCount(String(last.id));
         setValidationProgress({
-          validated: (myValidations as any).myCount || 0, // Using 'as any' due to loose typing in service
-          total: (myValidations as any).totalToValidate || others.length
+          validated: (myValidations as any).myCount || 0,
+          total: (myValidations as any).totalToValidate || combined.filter(s => s.hasStartedScout).length
         });
       }
 
@@ -133,7 +152,7 @@ const ScoutsPerformanceScreen = () => {
     if (!lastEvent) return;
     setLoading(true);
     try {
-      await dataService.scouts.save(String(lastEvent.id), myCounts);
+      await dataService.scouts.save(String(lastEvent.id), myCounts, myTotalScore);
       alert('Scouts salvos com sucesso!');
       await loadData(); // Refresh to ensure sync
     } catch (e) {
@@ -167,7 +186,8 @@ const ScoutsPerformanceScreen = () => {
   const handleContestSubmit = async () => {
     if (!contestModal.scout) return;
     try {
-      await dataService.scouts.validate(contestModal.scout.id, 'contest', contestModal.counts);
+      const newTotal = calculateTotal(contestModal.counts);
+      await dataService.scouts.validate(contestModal.scout.id, 'contest', contestModal.counts, newTotal);
       setContestModal({ ...contestModal, open: false });
       loadData();
       alert("Contestação enviada! Ficará pendente até aprovação.");
@@ -332,6 +352,33 @@ const ScoutsPerformanceScreen = () => {
                 );
               })}
             </div>
+
+            {/* Save Button Inside Scrollable Area */}
+            <div className="p-6 mt-4 mb-8">
+              <button
+                onClick={handleSaveMyStats}
+                disabled={myScoutStatus === 'approved' || loading}
+                className={`w-full font-bold text-lg rounded-2xl py-5 shadow-xl transition-all flex items-center justify-center gap-3 
+                     ${myScoutStatus === 'approved' ? 'bg-surface-dark text-slate-500 cursor-not-allowed' : 'bg-primary text-primary-content hover:shadow-primary/40 active:scale-[0.98]'}`}
+              >
+                {loading ? (
+                  <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                ) : myScoutStatus === 'approved' ? (
+                  <>
+                    <span className="material-symbols-outlined">verified</span>
+                    Pontuação Aprovada
+                  </>
+                ) : (
+                  <>
+                    Salvar e Enviar
+                    <span className="material-symbols-outlined">send</span>
+                  </>
+                )}
+              </button>
+              <p className="text-center text-[10px] text-slate-500 mt-4 uppercase tracking-widest font-bold">
+                Ao enviar, sua pontuação entrará em fase de validação pelos outros jogadores.
+              </p>
+            </div>
           </div>
         )}
 
@@ -366,63 +413,106 @@ const ScoutsPerformanceScreen = () => {
                 const total = calculateTotal(scout.stats);
                 const status = getMyValidationAction(scout); // 'approve' | 'contest' | null
                 const isApproved = scout.status === 'approved';
+                const isExpanded = expandedScoutId === scout.id;
+
+                // Sort rules so non-zero stats appear first
+                const sortedRules = [...SCOUT_RULES].sort((a, b) => {
+                  const valA = scout.stats[a.id] || 0;
+                  const valB = scout.stats[b.id] || 0;
+                  return valB - valA;
+                });
 
                 return (
-                  <div key={scout.id} className="bg-surface-dark rounded-2xl border border-white/5 overflow-hidden">
-                    <div className="p-4 flex items-center gap-3 border-b border-white/5 bg-white/[0.02]">
+                  <div key={scout.id} className="bg-surface-dark rounded-2xl border border-white/5 overflow-hidden transition-all duration-300">
+                    <div
+                      onClick={() => setExpandedScoutId(isExpanded ? null : scout.id)}
+                      className={`p-4 flex items-center gap-3 border-b border-white/5 cursor-pointer hover:bg-white/[0.02] transition-colors ${isExpanded ? 'bg-white/[0.04]' : ''}`}
+                    >
                       <img src={scout.profiles?.avatar || 'https://via.placeholder.com/50'} className="size-10 rounded-full object-cover border border-white/10" />
                       <div className="flex-1">
                         <h3 className="text-white font-bold text-sm">{scout.profiles?.name}</h3>
                         <p className="text-slate-500 text-[10px] uppercase font-bold">{scout.profiles?.is_pro ? 'AmaFut Pro' : 'Atleta'}</p>
                       </div>
-                      <div className="flex flex-col items-end">
+                      <div className="flex flex-col items-end mr-2">
                         <span className={`text-xl font-black ${total > 0 ? 'text-white' : 'text-slate-400'}`}>{total.toFixed(1)}</span>
                         <span className="text-[10px] text-slate-500 uppercase">pts</span>
                       </div>
+                      <span className={`material-symbols-outlined text-slate-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>expand_more</span>
                     </div>
 
-                    {/* Mini Stats Breakdown */}
-                    <div className="p-3 grid grid-cols-2 gap-2 text-[10px] text-slate-400 bg-black/20">
-                      {Object.entries(scout.stats).map(([key, val]) => {
-                        if (!val) return null;
-                        const rule = SCOUT_RULES.find(r => r.id === key);
-                        return (
-                          <div key={key} className="flex justify-between px-2">
-                            <span>{rule?.label || key}</span>
-                            <span className="text-white font-bold">{val}</span>
+                    {/* Expanded Content */}
+                    <div className={`transition-all duration-300 overflow-hidden ${isExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                      <div className="p-4 bg-background-dark/30 flex flex-col gap-2">
+                        {!scout.hasStartedScout ? (
+                          <div className="py-8 text-center text-slate-500 italic text-xs">
+                            Aguardando o jogador lançar seus scouts...
                           </div>
-                        )
-                      })}
-                    </div>
+                        ) : (
+                          sortedRules.map((rule) => {
+                            const val = scout.stats[rule.id] || 0;
+                            if (val === 0) return null; // Show only non-zero or all? Let's show non-zero for clarity
+                            return (
+                              <div key={rule.id} className="flex items-center justify-between p-2 rounded-lg border border-white/5 bg-white/[0.02]">
+                                <div className="flex flex-col">
+                                  <span className="text-xs text-slate-300 font-medium">{rule.label}</span>
+                                  <span className={`text-[10px] font-bold ${rule.isNegative ? 'text-red-400' : 'text-green-400'}`}>{rule.points > 0 ? '+' : ''}{rule.points} pts</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-white font-bold text-lg">{val}</span>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); openContestModal(scout); }}
+                                    className="size-8 rounded-full bg-white/5 hover:bg-red-500/20 hover:text-red-400 text-slate-500 flex items-center justify-center transition-colors"
+                                    title="Contestar este valor"
+                                  >
+                                    <span className="material-symbols-outlined text-sm">edit</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
 
-                    {/* Actions */}
-                    <div className="p-3 flex gap-2">
-                      {status === 'approve' ? (
-                        <div className="w-full py-2 bg-green-500/10 border border-green-500/20 text-green-500 text-center rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2">
-                          <span className="material-symbols-outlined text-sm">check</span>
-                          Validado
+                        {/* Actions */}
+                        <div className="flex gap-3 mt-4 pt-2 border-t border-white/5">
+                          {status === 'approve' ? (
+                            <div className="w-full py-3 bg-green-500/10 border border-green-500/20 text-green-500 text-center rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2">
+                              <span className="material-symbols-outlined text-sm">check_circle</span>
+                              Validado por você
+                            </div>
+                          ) : status === 'contest' ? (
+                            <div className="w-full py-3 bg-red-500/10 border border-red-500/20 text-red-500 text-center rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2">
+                              <span className="material-symbols-outlined text-sm">gavel</span>
+                              Você contestou
+                            </div>
+                          ) : isApproved ? (
+                            <div className="w-full py-3 bg-slate-500/10 border border-slate-500/20 text-slate-500 text-center rounded-xl font-bold text-xs uppercase">
+                              <span className="material-symbols-outlined text-sm mr-2 align-middle">lock</span>
+                              Aprovado globalmente
+                            </div>
+                          ) : !scout.hasStartedScout ? (
+                            <div className="w-full py-3 bg-slate-500/5 border border-white/5 text-slate-600 text-center rounded-xl font-bold text-xs uppercase cursor-not-allowed">
+                              Aguardando Lançamento
+                            </div>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => openContestModal(scout)}
+                                className="flex-1 py-3 bg-whit/5 hover:bg-white/10 text-slate-400 hover:text-red-400 font-bold rounded-xl text-xs uppercase border border-white/10 hover:border-red-500/30 transition-all flex items-center justify-center gap-2"
+                              >
+                                <span className="material-symbols-outlined text-sm">gavel</span>
+                                Contestar
+                              </button>
+                              <button
+                                onClick={() => handleApprove(scout.id)}
+                                className="flex-[2] py-3 bg-primary text-background-dark font-black rounded-xl text-sm uppercase shadow-lg shadow-primary/10 hover:shadow-primary/30 transition-all flex items-center justify-center gap-2 active:scale-95"
+                              >
+                                <span className="material-symbols-outlined text-lg filled">thumb_up</span>
+                                Aprovar Tudo
+                              </button>
+                            </>
+                          )}
                         </div>
-                      ) : status === 'contest' ? (
-                        <div className="w-full py-2 bg-red-500/10 border border-red-500/20 text-red-500 text-center rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2">
-                          <span className="material-symbols-outlined text-sm">gavel</span>
-                          Contestado
-                        </div>
-                      ) : isApproved ? (
-                        <div className="w-full py-2 bg-slate-500/10 border border-slate-500/20 text-slate-500 text-center rounded-xl font-bold text-xs uppercase">
-                          Aprovado pelo Time
-                        </div>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => openContestModal(scout)}
-                            className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-red-400 font-bold rounded-xl text-xs uppercase border border-transparent hover:border-red-500/30 transition-all"
-                          >Contestar</button>
-                          <button
-                            onClick={() => handleApprove(scout.id)}
-                            className="flex-[2] py-3 bg-primary text-background-dark font-bold rounded-xl text-xs uppercase shadow-lg shadow-primary/10 hover:shadow-primary/30 transition-all"
-                          >Aprovar</button>
-                        </>
-                      )}
+                      </div>
                     </div>
                   </div>
                 )
@@ -433,20 +523,7 @@ const ScoutsPerformanceScreen = () => {
 
       </main>
 
-      {/* Footer Actions (Only for My Stats Mode) */}
-      {viewMode === 'my_stats' && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background-dark via-background-dark to-transparent z-20">
-          <button
-            onClick={handleSaveMyStats}
-            disabled={myScoutStatus === 'approved' || loading}
-            className={`w-full font-bold text-lg rounded-full py-4 shadow-lg transition-all flex items-center justify-center gap-2 
-                 ${myScoutStatus === 'approved' ? 'bg-surface-dark text-slate-500 cursor-not-allowed' : 'bg-primary text-primary-content hover:shadow-primary/40 active:scale-[0.98]'}`}
-          >
-            {myScoutStatus === 'approved' ? 'Pontuação Aprovada' : 'Salvar e Enviar'}
-            {myScoutStatus !== 'approved' && <span className="material-symbols-outlined text-xl">send</span>}
-          </button>
-        </div>
-      )}
+      {/* CONTEST MODAL */}
 
       {/* CONTEST MODAL */}
       {contestModal.open && contestModal.scout && (

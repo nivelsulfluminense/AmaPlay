@@ -269,6 +269,16 @@ export const authService = {
         if (error) throw error;
     },
 
+    signInWithFacebook: async () => {
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'facebook',
+            options: {
+                redirectTo: `${window.location.origin}/#/dashboard`
+            }
+        });
+        if (error) throw error;
+    },
+
     /**
      * 🔔 LISTENER DE AUTH
      */

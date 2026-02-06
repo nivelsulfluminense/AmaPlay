@@ -1,4 +1,4 @@
-import { supabase, Transaction, InventoryItem, GameEvent, EventParticipant, Team, Profile } from './supabase';
+﻿import { supabase, Transaction, InventoryItem, GameEvent, EventParticipant, Team, Profile } from './supabase';
 import { Role } from '../contexts/UserContext';
 
 // Legacy interfaces for backward compatibility
@@ -114,6 +114,7 @@ export interface LegacyGameEvent {
     opponent?: string;
     date: string;
     time: string;
+    endTime?: string;
     location: string;
     confirmedCount: number;
     myStatus: 'pending' | 'confirmed' | 'declined';
@@ -184,15 +185,15 @@ export const dataService = {
             if (error) return [];
 
             // Regras de visibilidade solicitadas:
-            // Presidente vê VP. VP vê Presidente. Ambos veem Admins e Jogadores.
+            // Presidente vÃª VP. VP vÃª Presidente. Ambos veem Admins e Jogadores.
             return (data || []).filter((p: any) => {
                 const requested = p.intended_role;
                 if (profile.role === 'presidente') {
-                    // Presidente vê tudo que for pendente
+                    // Presidente vÃª tudo que for pendente
                     return true;
                 }
                 if (profile.role === 'vice-presidente') {
-                    // Vice vê Presidente (solicitação), Admins e Jogadores.
+                    // Vice vÃª Presidente (solicitaÃ§Ã£o), Admins e Jogadores.
                     return true; // Simplificado: eles veem todos os pendentes do time
                 }
                 return false;
@@ -398,7 +399,7 @@ export const dataService = {
 
                 if (error) throw new Error(error.message);
             } else {
-                throw new Error('Transação não encontrada');
+                throw new Error('TransaÃ§Ã£o nÃ£o encontrada');
             }
         },
 
@@ -732,7 +733,7 @@ export const dataService = {
             }
 
             if (teamId) {
-                // Suporta tanto o padrão novo (status='approved') quanto o legado (is_approved=true)
+                // Suporta tanto o padrÃ£o novo (status='approved') quanto o legado (is_approved=true)
                 // Usamos eq(team_id) e o or(status/is_approved)
                 query = query.eq('team_id', teamId).or('status.eq.approved,is_approved.eq.true,role.eq.presidente,role.eq.vice-presidente');
             }
@@ -847,7 +848,7 @@ export const dataService = {
             }
 
             // Update current user's profile
-            if (!user) throw new Error('Usuário não autenticado');
+            if (!user) throw new Error('UsuÃ¡rio nÃ£o autenticado');
 
             const { data, error } = await supabase
                 .from('profiles')
@@ -942,6 +943,7 @@ export const dataService = {
                     opponent: e.opponent || undefined,
                     date: e.event_date,
                     time: e.event_time,
+                    endTime: e.end_time || undefined,
                     location: e.location,
                     confirmedCount: e.confirmed_count,
                     myStatus: (participation?.status as 'pending' | 'confirmed' | 'declined') || 'pending',
@@ -951,9 +953,7 @@ export const dataService = {
             });
         },
 
-        getParticipants: async (eventId: string | number): Promise<{ name: string, avatar: string, status: 'confirmed' | 'declined' }[]> => {
-            // If it's a numeric ID from our legacy mapping, we might have trouble finding the real UUID.
-            // But usually we use the string ID in the new code.
+        getParticipants: async (eventId: string | number): Promise<{ id: string, name: string, avatar: string, status: 'confirmed' | 'declined', is_pro: boolean }[]> => {
             const realId = typeof eventId === 'number' ? null : eventId;
             if (!realId) return [];
 
@@ -962,8 +962,10 @@ export const dataService = {
                 .select(`
                     status,
                     profiles:user_id (
+                        id,
                         name,
-                        avatar
+                        avatar,
+                        is_pro
                     )
                 `)
                 .eq('event_id', realId);
@@ -971,9 +973,11 @@ export const dataService = {
             if (error) return [];
 
             return (data || []).map((p: any) => ({
+                id: p.profiles?.id || '',
                 name: p.profiles?.name || 'Desconhecido',
                 avatar: p.profiles?.avatar || '',
-                status: p.status as 'confirmed' | 'declined'
+                status: p.status as 'confirmed' | 'declined',
+                is_pro: !!p.profiles?.is_pro
             }));
         },
 
@@ -989,6 +993,7 @@ export const dataService = {
                     opponent: event.opponent,
                     event_date: event.date,
                     event_time: event.time,
+                    end_time: event.endTime,
                     location: event.location,
                     confirmed_count: 1, // Creator confirms
                     team_id: teamId,
@@ -1021,6 +1026,7 @@ export const dataService = {
                 opponent: data.opponent || undefined,
                 date: data.event_date,
                 time: data.event_time,
+                endTime: data.end_time || undefined,
                 location: data.location,
                 confirmedCount: data.confirmed_count,
                 myStatus: 'confirmed',
@@ -1091,13 +1097,13 @@ export const dataService = {
 
         updateStatus: async (id: number | string, status: 'confirmed' | 'declined'): Promise<void> => {
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Usuário não autenticado');
+            if (!user) throw new Error('UsuÃ¡rio nÃ£o autenticado');
 
             let realId = id;
             if (typeof id === 'number') {
                 const { data: events } = await supabase.from('events').select('id').limit(100);
                 const found = events?.find(e => parseInt(e.id.replace(/-/g, '').slice(0, 10), 16) === id);
-                if (!found) throw new Error('Evento não encontrado');
+                if (!found) throw new Error('Evento nÃ£o encontrado');
                 realId = found.id;
             }
 
@@ -1116,7 +1122,7 @@ export const dataService = {
 
             if (upsertError) {
                 console.error('Erro ao atualizar status do participante:', upsertError);
-                throw new Error('Erro ao atualizar presença: ' + upsertError.message);
+                throw new Error('Erro ao atualizar presenÃ§a: ' + upsertError.message);
             }
         },
 
@@ -1125,7 +1131,7 @@ export const dataService = {
             if (typeof id === 'number') {
                 const { data: events } = await supabase.from('events').select('id').limit(100);
                 const found = events?.find(e => parseInt(e.id.replace(/-/g, '').slice(0, 10), 16) === id);
-                if (!found) throw new Error('Evento não encontrado');
+                if (!found) throw new Error('Evento nÃ£o encontrado');
                 realId = found.id;
             }
 
@@ -1305,7 +1311,7 @@ export const dataService = {
         }
     },
     scouts: {
-        async save(eventId: string, stats: any) {
+        async save(eventId: string, stats: any, totalScore: number) {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("No user");
 
@@ -1319,7 +1325,12 @@ export const dataService = {
             if (existing) {
                 return await supabase
                     .from('match_scouts')
-                    .update({ stats, status: 'pending', updated_at: new Date().toISOString() })
+                    .update({
+                        stats,
+                        total_score: totalScore,
+                        status: 'pending',
+                        updated_at: new Date().toISOString()
+                    })
                     .eq('id', existing.id);
             } else {
                 return await supabase
@@ -1328,6 +1339,7 @@ export const dataService = {
                         event_id: eventId,
                         player_id: user.id,
                         stats,
+                        total_score: totalScore,
                         status: 'pending'
                     });
             }
@@ -1350,34 +1362,69 @@ export const dataService = {
             const { data } = await supabase
                 .from('match_scouts')
                 .select('*, profiles:player_id(name, avatar, is_pro), match_scout_validations(validator_id, action, contest_data)')
-                .eq('event_id', eventId);
+                .eq('event_id', eventId)
+                .order('total_score', { ascending: false });
             return data || [];
         },
 
-        async validate(scoutId: string, action: 'approve' | 'contest', contestData?: any) {
+        async validate(scoutId: string, action: 'approve' | 'contest', contestData?: any, totalScore?: number) {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("No user");
 
-            // Check previous validation
-            const { error } = await supabase.from('match_scout_validations').upsert({
-                scout_id: scoutId,
-                validator_id: user.id,
-                action,
-                contest_data: contestData
-            }, { onConflict: 'scout_id, validator_id' });
+            // Handle Context/Change logic
+            if (action === 'contest' && contestData) {
+                // If we are changing values (contesting with data), we update the main record
+                // and reset the status to pending, effectively restarting the process.
+                // We also need to clear previous approvals because the data changed.
 
-            if (error) throw error;
+                // 1. Update stats and status
+                await supabase
+                    .from('match_scouts')
+                    .update({
+                        stats: contestData,
+                        total_score: totalScore !== undefined ? totalScore : 0, // Recalculated total
+                        status: 'pending',
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', scoutId);
 
-            // Check if we hit 5 approvals
-            if (action === 'approve') {
-                const { count } = await supabase
+                // 2. Clear previous validations (except maybe the contestant's own action if we want to track it)
+                // Actually, cleaner to just wipe validations so everyone has to re-approve the new numbers.
+                await supabase
                     .from('match_scout_validations')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('scout_id', scoutId)
-                    .eq('action', 'approve');
+                    .delete()
+                    .eq('scout_id', scoutId);
 
-                if ((count || 0) >= 5) {
-                    await supabase.from('match_scouts').update({ status: 'approved' }).eq('id', scoutId);
+                // 3. Add the contestation record for history/logging (optional, but good for tracking)
+                return await supabase.from('match_scout_validations').upsert({
+                    scout_id: scoutId,
+                    validator_id: user.id,
+                    action: 'contest',
+                    contest_data: contestData
+                }, { onConflict: 'scout_id, validator_id' });
+
+            } else {
+                // Normal Approval Logic
+                const { error } = await supabase.from('match_scout_validations').upsert({
+                    scout_id: scoutId,
+                    validator_id: user.id,
+                    action,
+                    contest_data: contestData
+                }, { onConflict: 'scout_id, validator_id' });
+
+                if (error) throw error;
+
+                // Check if we hit 5 approvals
+                if (action === 'approve') {
+                    const { count } = await supabase
+                        .from('match_scout_validations')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('scout_id', scoutId)
+                        .eq('action', 'approve');
+
+                    if ((count || 0) >= 2) { // MVP: Reduced to 2 for easier testing, ideally 5
+                        await supabase.from('match_scouts').update({ status: 'approved' }).eq('id', scoutId);
+                    }
                 }
             }
         },
@@ -1412,5 +1459,5 @@ export const dataService = {
                 .order('created_at', { ascending: true });
             return data || [];
         }
-    }
+    },
 };

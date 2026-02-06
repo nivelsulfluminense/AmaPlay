@@ -79,6 +79,7 @@ export interface GameEvent {
     opponent: string | null;
     event_date: string;
     event_time: string;
+    end_time?: string;
     location: string;
     confirmed_count: number;
     team_id: string | null;

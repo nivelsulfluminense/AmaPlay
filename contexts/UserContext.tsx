@@ -60,6 +60,7 @@ interface UserContextType {
   register: (email: string, pass: string, name?: string) => Promise<any>;
   loginWithGoogle: () => Promise<void>;
   loginWithApple: () => Promise<void>;
+  loginWithFacebook: () => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -90,6 +91,7 @@ interface UserContextType {
   position: 'GOL' | 'ZAG' | 'MEI' | 'ATA' | null;
   isApproved: boolean; // Agora booleano
   isPro: boolean;
+  refreshProfile: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -188,6 +190,18 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
   const isProcessingRef = React.useRef(false);
   const lastSessionId = React.useRef<string | null>(null);
+
+  const refreshProfile = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const fullProfile = await authService.getFullProfile(userId);
+      if (fullProfile) {
+        applyUserData(fullProfile);
+      }
+    } catch (e) {
+      console.error("Error refreshing profile:", e);
+    }
+  }, [userId]);
 
   // Inicializa a partir da sessão do Supabase
   useEffect(() => {
@@ -457,6 +471,21 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       await authService.signInWithApple();
     } catch (err: any) {
       const message = err.message || 'Erro ao entrar com Apple';
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loginWithFacebook = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await authService.signInWithFacebook();
+    } catch (err: any) {
+      const message = err.message || 'Erro ao entrar com Facebook';
       setError(message);
       throw err;
     } finally {
@@ -1073,10 +1102,12 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     isFirstManager,
     isApproved, // Added missing export
     isPro,
+    refreshProfile,
     login,
     register,
     loginWithGoogle,
     loginWithApple,
+    loginWithFacebook,
     logout,
     resetPassword,
     createTeam,

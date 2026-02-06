@@ -6,7 +6,7 @@ import { authService } from '../services/authService';
 import { supabase } from '../services/supabase';
 
 const DashboardScreen = () => {
-  const { role, name, avatar, logout, teamId, isApproved, teamDetails, intendedRole, isFirstManager, unreadCount, fetchNotifications } = useUser();
+  const { role, name, avatar, logout, teamId, isApproved, teamDetails, intendedRole, isFirstManager, unreadCount, fetchNotifications, isPro } = useUser();
 
   const isManager = role === 'presidente' || role === 'vice-presidente' || intendedRole === 'presidente' || intendedRole === 'vice-presidente';
   const isUserApproved = isApproved || isManager; // Presidentes/Vices são considerados aprovados automaticamente
@@ -291,7 +291,7 @@ const DashboardScreen = () => {
           <h3 className="text-slate-400 text-xs font-bold tracking-widest uppercase mb-4 px-2">Ações Rápidas</h3>
           <div className="grid grid-cols-3 gap-4">
             <button
-              onClick={() => navigate('/scouts')}
+              onClick={() => navigate(isPro ? '/pro-selection' : '/scouts')}
               className="flex flex-col items-center gap-3 group"
             >
               <div className="size-16 rounded-full bg-surface-dark border border-white/10 flex items-center justify-center text-white group-active:scale-95 transition-all hover:bg-white/10 hover:border-primary/50">

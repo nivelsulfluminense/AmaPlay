@@ -103,12 +103,12 @@ const PlayerStatsScreen = () => {
         try {
             const players = await dataService.players.list();
             const teamPlayers = players
-                .filter(p => p.teamId === teamId && p.id !== userId && p.cardAvatar)
+                .filter(p => p.teamId === teamId && p.id !== userId)
                 .map(p => ({
                     id: p.id,
-                    name: p.name,
-                    pos: p.position,
-                    avatar: p.cardAvatar, // Use card photo
+                    name: p.name || 'Atleta sem nome',
+                    pos: p.position || 'MEI',
+                    avatar: p.cardAvatar || p.avatar || 'https://via.placeholder.com/150', // Fallback cascade
                     voteCount: p.voteCount || 0,
                     stats: p.stats
                 }));

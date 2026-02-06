@@ -21,6 +21,7 @@ const AgendaScreen = () => {
     const [formTitle, setFormTitle] = useState('');
     const [formDate, setFormDate] = useState('');
     const [formTime, setFormTime] = useState('');
+    const [formEndTime, setFormEndTime] = useState('');
     const [formLocation, setFormLocation] = useState('');
 
     // Monthly & Detail Data
@@ -188,6 +189,7 @@ const AgendaScreen = () => {
                 opponent: (eventType === 'game') ? formTitle : undefined,
                 date: formDate,
                 time: formTime,
+                endTime: formEndTime || undefined,
                 location: formLocation,
                 confirmedCount: 1,
                 myStatus: 'confirmed' as const,
@@ -208,6 +210,7 @@ const AgendaScreen = () => {
             setFormTitle('');
             setFormDate('');
             setFormTime('');
+            setFormEndTime('');
             setFormLocation('');
             setRecurrence('none');
 
@@ -227,6 +230,7 @@ const AgendaScreen = () => {
         setFormTitle(event.opponent || event.title);
         setFormDate(event.date);
         setFormTime(event.time);
+        setFormEndTime(event.endTime || '');
         setFormLocation(event.location);
         setRecurrence('none');
         setShowAddModal(true);
@@ -248,6 +252,15 @@ const AgendaScreen = () => {
 
     const toggleStatus = async (id: number | string, status: 'confirmed' | 'declined') => {
         if (typeof id === 'string' && id.startsWith('bday')) return;
+
+        const evt = events.find(e => e.id === id);
+        if (evt && evt.endTime) {
+            const endDateTime = new Date(evt.date + 'T' + evt.endTime);
+            if (new Date() > endDateTime) {
+                alert('Este evento já foi encerrado.');
+                return;
+            }
+        }
 
         // 🚀 Optimistic Update
         const previousEvents = [...events];
@@ -346,6 +359,7 @@ const AgendaScreen = () => {
                                 setFormTitle('');
                                 setFormDate('');
                                 setFormTime('');
+                                setFormEndTime('');
                                 setFormLocation('');
                                 setRecurrence('none');
                                 setShowAddModal(true);
@@ -513,7 +527,9 @@ const AgendaScreen = () => {
                                             <span className="font-bold">
                                                 {new Date(event.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                                                 <span className="mx-2 text-slate-500">•</span>
-                                                {event.type === 'birthday' ? 'O dia todo' : event.time}
+                                                {event.type === 'birthday' ? 'O dia todo' : (
+                                                    event.endTime ? `${event.time} - ${event.endTime}` : event.time
+                                                )}
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-3 text-sm text-slate-200">
@@ -540,41 +556,51 @@ const AgendaScreen = () => {
 
                                     {/* RSVP Section */}
                                     {event.type !== 'birthday' && (
-                                        <div className="bg-background-dark/50 rounded-xl p-3 border border-white/5" onClick={(e) => e.stopPropagation()}>
-                                            <div className="flex justify-between items-center mb-3">
-                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Sua Presença</span>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); setViewingParticipants(String(event.id)); }}
-                                                    className="flex items-center gap-1 group"
-                                                >
-                                                    <span className="material-symbols-outlined text-sm text-primary">group</span>
-                                                    <span className="text-xs text-white font-bold underline group-hover:text-primary transition-colors">{event.confirmedCount} confirmados</span>
-                                                </button>
-                                            </div>
+                                        (() => {
+                                            const isExpired = event.endTime && new Date() > new Date(event.date + 'T' + event.endTime);
+                                            return isExpired ? (
+                                                <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20 flex flex-col items-center justify-center text-red-400 gap-1">
+                                                    <span className="material-symbols-outlined text-xl">event_busy</span>
+                                                    <span className="text-xs font-bold uppercase tracking-widest">Evento Encerrado</span>
+                                                </div>
+                                            ) : (
+                                                <div className="bg-background-dark/50 rounded-xl p-3 border border-white/5" onClick={(e) => e.stopPropagation()}>
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Sua Presença</span>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setViewingParticipants(String(event.id)); }}
+                                                            className="flex items-center gap-1 group"
+                                                        >
+                                                            <span className="material-symbols-outlined text-sm text-primary">group</span>
+                                                            <span className="text-xs text-white font-bold underline group-hover:text-primary transition-colors">{event.confirmedCount} confirmados</span>
+                                                        </button>
+                                                    </div>
 
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); toggleStatus(event.id, 'declined'); }}
-                                                    className={`py-2 rounded-lg text-sm font-bold border transition-all flex items-center justify-center gap-2 ${event.myStatus === 'declined'
-                                                        ? 'bg-red-500/10 text-red-500 border-red-500'
-                                                        : 'border-white/10 text-slate-400 hover:bg-white/5'
-                                                        }`}
-                                                >
-                                                    <span className="material-symbols-outlined text-lg">close</span>
-                                                    Não vou
-                                                </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); toggleStatus(event.id, 'confirmed'); }}
-                                                    className={`py-2 rounded-lg text-sm font-bold border transition-all flex items-center justify-center gap-2 ${event.myStatus === 'confirmed'
-                                                        ? 'bg-primary/10 text-primary border-primary shadow-[0_0_10px_rgba(19,236,91,0.2)]'
-                                                        : 'bg-primary text-background-dark border-transparent hover:bg-primary-dark'
-                                                        }`}
-                                                >
-                                                    <span className="material-symbols-outlined text-lg">check</span>
-                                                    Confirmar
-                                                </button>
-                                            </div>
-                                        </div>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); toggleStatus(event.id, 'declined'); }}
+                                                            className={`py-2 rounded-lg text-sm font-bold border transition-all flex items-center justify-center gap-2 ${event.myStatus === 'declined'
+                                                                ? 'bg-red-500/10 text-red-500 border-red-500'
+                                                                : 'border-white/10 text-slate-400 hover:bg-white/5'
+                                                                }`}
+                                                        >
+                                                            <span className="material-symbols-outlined text-lg">close</span>
+                                                            Não vou
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); toggleStatus(event.id, 'confirmed'); }}
+                                                            className={`py-2 rounded-lg text-sm font-bold border transition-all flex items-center justify-center gap-2 ${event.myStatus === 'confirmed'
+                                                                ? 'bg-primary/10 text-primary border-primary shadow-[0_0_10px_rgba(19,236,91,0.2)]'
+                                                                : 'bg-primary text-background-dark border-transparent hover:bg-primary-dark'
+                                                                }`}
+                                                        >
+                                                            <span className="material-symbols-outlined text-lg">check</span>
+                                                            Confirmar
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()
                                     )}
                                 </div>
                             </div>
@@ -665,7 +691,7 @@ const AgendaScreen = () => {
                                     <div className="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between">
                                         <div className="flex items-center gap-3">
                                             <div className={`size-10 rounded-xl flex items-center justify-center text-background-dark ${event.type === 'game' ? 'bg-primary' :
-                                                    event.type === 'match' ? 'bg-blue-500' : 'bg-orange-500'
+                                                event.type === 'match' ? 'bg-blue-500' : 'bg-orange-500'
                                                 }`}>
                                                 <span className="material-symbols-outlined font-black">
                                                     {event.type === 'game' ? 'sports_soccer' :
@@ -792,7 +818,9 @@ const AgendaScreen = () => {
                                     <div>
                                         <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Data e Horário</p>
                                         <p className="text-white font-bold">
-                                            {new Date(selectedDetail.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} • {selectedDetail.type === 'birthday' ? 'O dia todo' : selectedDetail.time}
+                                            {new Date(selectedDetail.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} • {selectedDetail.type === 'birthday' ? 'O dia todo' : (
+                                                selectedDetail.endTime ? `${selectedDetail.time} - ${selectedDetail.endTime}` : selectedDetail.time
+                                            )}
                                         </p>
                                     </div>
                                 </div>
@@ -827,26 +855,41 @@ const AgendaScreen = () => {
                                     Parabenizar agora
                                 </button>
                             ) : (
-                                <div className="flex gap-3">
-                                    <button
-                                        onClick={() => toggleStatus(selectedDetail.id, selectedDetail.myStatus === 'confirmed' ? 'declined' : 'confirmed')}
-                                        className={`flex-1 py-4 rounded-2xl font-black italic uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 ${selectedDetail.myStatus === 'confirmed'
-                                            ? 'bg-red-500 text-white shadow-red-500/20'
-                                            : 'bg-primary text-background-dark shadow-primary/20'
-                                            }`}
-                                    >
-                                        <span className="material-symbols-outlined font-black">
-                                            {selectedDetail.myStatus === 'confirmed' ? 'close' : 'check'}
-                                        </span>
-                                        {selectedDetail.myStatus === 'confirmed' ? 'Desistir' : 'Confirmar'}
-                                    </button>
-                                    <button
-                                        onClick={() => handleInvite(selectedDetail)}
-                                        className="size-14 rounded-2xl bg-green-500 text-white flex items-center justify-center shadow-xl shadow-green-500/20 active:scale-95 transition-all"
-                                    >
-                                        <span className="material-symbols-outlined filled text-2xl">share</span>
-                                    </button>
-                                </div>
+                                (() => {
+                                    const isExpired = selectedDetail.endTime && new Date() > new Date(selectedDetail.date + 'T' + selectedDetail.endTime);
+
+                                    if (isExpired) {
+                                        return (
+                                            <div className="w-full py-4 bg-slate-700/50 text-slate-400 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                                                <span className="material-symbols-outlined">lock_clock</span>
+                                                Evento Encerrado
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <div className="flex gap-3">
+                                            <button
+                                                onClick={() => toggleStatus(selectedDetail.id, selectedDetail.myStatus === 'confirmed' ? 'declined' : 'confirmed')}
+                                                className={`flex-1 py-4 rounded-2xl font-black italic uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 ${selectedDetail.myStatus === 'confirmed'
+                                                    ? 'bg-red-500 text-white shadow-red-500/20'
+                                                    : 'bg-primary text-background-dark shadow-primary/20'
+                                                    }`}
+                                            >
+                                                <span className="material-symbols-outlined font-black">
+                                                    {selectedDetail.myStatus === 'confirmed' ? 'close' : 'check'}
+                                                </span>
+                                                {selectedDetail.myStatus === 'confirmed' ? 'Desistir' : 'Confirmar'}
+                                            </button>
+                                            <button
+                                                onClick={() => handleInvite(selectedDetail)}
+                                                className="size-14 rounded-2xl bg-green-500 text-white flex items-center justify-center shadow-xl shadow-green-500/20 active:scale-95 transition-all"
+                                            >
+                                                <span className="material-symbols-outlined filled text-2xl">share</span>
+                                            </button>
+                                        </div>
+                                    );
+                                })()
                             )}
                         </div>
                     </div>
@@ -912,7 +955,9 @@ const AgendaScreen = () => {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
-                                    <label className="text-xs font-bold text-slate-400 uppercase ml-1">Data</label>
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-xs font-bold text-slate-400 uppercase ml-1">Data</label>
+                                    </div>
                                     <input
                                         type="date"
                                         className="w-full bg-background-dark border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-primary focus:border-primary [color-scheme:dark]"
@@ -921,13 +966,22 @@ const AgendaScreen = () => {
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-xs font-bold text-slate-400 uppercase ml-1">Horário</label>
-                                    <input
-                                        type="time"
-                                        className="w-full bg-background-dark border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-primary focus:border-primary [color-scheme:dark]"
-                                        value={formTime}
-                                        onChange={(e) => setFormTime(e.target.value)}
-                                    />
+                                    <label className="text-xs font-bold text-slate-400 uppercase ml-1">Horário (Início/Fim)</label>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="time"
+                                            className="w-1/2 bg-background-dark border border-white/10 rounded-xl px-2 py-3 text-white focus:ring-primary focus:border-primary [color-scheme:dark] text-center text-sm"
+                                            value={formTime}
+                                            onChange={(e) => setFormTime(e.target.value)}
+                                        />
+                                        <span className="text-slate-500 font-bold">-</span>
+                                        <input
+                                            type="time"
+                                            className="w-1/2 bg-background-dark border border-white/10 rounded-xl px-2 py-3 text-white focus:ring-primary focus:border-primary [color-scheme:dark] text-center text-sm"
+                                            value={formEndTime}
+                                            onChange={(e) => setFormEndTime(e.target.value)}
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
