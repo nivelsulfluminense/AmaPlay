@@ -143,6 +143,9 @@ const DashboardScreen = () => {
     return `Faltam ${days} ${days === 1 ? 'dia' : 'dias'}`;
   };
 
+  const quickActionButtonStyle = "size-16 rounded-full bg-surface-dark border border-white/10 flex items-center justify-center transition-all duration-300 group-hover:bg-primary group-hover:text-background-dark group-hover:border-primary group-hover:shadow-[0_0_20px_rgba(19,236,91,0.4)] group-active:scale-95";
+  const iconStyle = "material-symbols-outlined text-3xl transition-colors duration-300 group-hover:filled";
+
   return (
     <div className="pb-28">
       {/* Sticky Header */}
@@ -294,8 +297,8 @@ const DashboardScreen = () => {
               onClick={() => navigate(isPro ? '/pro-selection' : '/scouts')}
               className="flex flex-col items-center gap-3 group"
             >
-              <div className="size-16 rounded-full bg-surface-dark border border-white/10 flex items-center justify-center text-white group-active:scale-95 transition-all hover:bg-white/10 hover:border-primary/50">
-                <span className="material-symbols-outlined text-3xl text-primary">military_tech</span>
+              <div className={`${quickActionButtonStyle} text-primary`}>
+                <span className={iconStyle}>military_tech</span>
               </div>
               <span className="text-xs font-medium text-slate-300 text-center leading-tight">AmaFut<br />Pro</span>
             </button>
@@ -304,8 +307,8 @@ const DashboardScreen = () => {
               onClick={() => navigate('/player-stats')}
               className="flex flex-col items-center gap-3 group"
             >
-              <div className="size-16 rounded-full bg-surface-dark border border-white/10 flex items-center justify-center text-white group-active:scale-95 transition-all hover:bg-white/10 hover:border-primary/50">
-                <span className="material-symbols-outlined text-3xl">hexagon</span>
+              <div className={`${quickActionButtonStyle} text-primary`}>
+                <span className={iconStyle}>hexagon</span>
               </div>
               <span className="text-xs font-medium text-slate-300 text-center leading-tight">Overall</span>
             </button>
@@ -314,8 +317,8 @@ const DashboardScreen = () => {
               onClick={() => navigate('/team-stats')}
               className="flex flex-col items-center gap-3 group"
             >
-              <div className="size-16 rounded-full bg-surface-dark border border-white/10 flex items-center justify-center text-white group-active:scale-95 transition-all hover:bg-white/10 hover:border-primary/50">
-                <span className="material-symbols-outlined text-3xl">query_stats</span>
+              <div className={`${quickActionButtonStyle} text-primary`}>
+                <span className={iconStyle}>query_stats</span>
               </div>
               <span className="text-xs font-medium text-slate-300 text-center leading-tight">Estatísticas<br />Jogadores</span>
             </button>
@@ -324,8 +327,8 @@ const DashboardScreen = () => {
               onClick={() => navigate('/scoring')}
               className="flex flex-col items-center gap-3 group"
             >
-              <div className="size-16 rounded-full bg-surface-dark border border-white/10 flex items-center justify-center text-white group-active:scale-95 transition-all hover:bg-white/10 hover:border-yellow-500/50">
-                <span className="material-symbols-outlined text-3xl text-yellow-500">stars</span>
+              <div className={`${quickActionButtonStyle} text-primary`}>
+                <span className={iconStyle}>stars</span>
               </div>
               <span className="text-xs font-medium text-slate-300 text-center leading-tight">Scoring</span>
             </button>
@@ -334,8 +337,8 @@ const DashboardScreen = () => {
               onClick={() => navigate('/rule-book')}
               className="flex flex-col items-center gap-3 group"
             >
-              <div className="size-16 rounded-full bg-surface-dark border border-white/10 flex items-center justify-center text-white group-active:scale-95 transition-all hover:bg-white/10 hover:border-primary/50">
-                <span className="material-symbols-outlined text-3xl">menu_book</span>
+              <div className={`${quickActionButtonStyle} text-primary`}>
+                <span className={iconStyle}>menu_book</span>
               </div>
               <span className="text-xs font-medium text-slate-300 text-center leading-tight">Livro de<br />Regras</span>
             </button>
@@ -345,8 +348,8 @@ const DashboardScreen = () => {
                 onClick={() => navigate('/agenda')}
                 className="flex flex-col items-center gap-3 group"
               >
-                <div className="size-16 rounded-full bg-primary flex items-center justify-center text-background-dark shadow-lg shadow-primary/25 group-active:scale-95 transition-transform duration-200 ring-4 ring-transparent hover:ring-primary/20">
-                  <span className="material-symbols-outlined text-3xl filled">outdoor_grill</span>
+                <div className={`${quickActionButtonStyle} text-primary`}>
+                  <span className={iconStyle}>outdoor_grill</span>
                 </div>
                 <span className="text-xs font-medium text-slate-300 text-center leading-tight">Agendar<br />Churrasco</span>
               </button>
@@ -358,8 +361,8 @@ const DashboardScreen = () => {
                   onClick={() => navigate('/agenda')}
                   className="flex flex-col items-center gap-3 group"
                 >
-                  <div className="size-16 rounded-full bg-surface-dark border border-white/10 flex items-center justify-center text-white group-active:scale-95 transition-all hover:bg-white/10 hover:border-primary/50">
-                    <span className="material-symbols-outlined text-3xl">fact_check</span>
+                  <div className={`${quickActionButtonStyle} text-primary`}>
+                    <span className={iconStyle}>fact_check</span>
                   </div>
                   <span className="text-xs font-medium text-slate-300 text-center leading-tight">Lista de<br />Presença</span>
                 </button>
@@ -367,8 +370,8 @@ const DashboardScreen = () => {
                   onClick={() => navigate('/finance', { state: { action: 'add_expense' } })}
                   className="flex flex-col items-center gap-3 group"
                 >
-                  <div className="size-16 rounded-full bg-surface-dark border border-white/10 flex items-center justify-center text-white group-active:scale-95 transition-all hover:bg-white/10 hover:border-primary/50">
-                    <span className="material-symbols-outlined text-3xl">payments</span>
+                  <div className={`${quickActionButtonStyle} text-primary`}>
+                    <span className={iconStyle}>payments</span>
                   </div>
                   <span className="text-xs font-medium text-slate-300 text-center leading-tight">Lançar<br />Gasto</span>
                 </button>
@@ -380,8 +383,8 @@ const DashboardScreen = () => {
                 onClick={() => navigate('/player-payments')}
                 className="flex flex-col items-center gap-3 group"
               >
-                <div className="size-16 rounded-full bg-primary flex items-center justify-center text-background-dark shadow-lg shadow-primary/25 group-active:scale-95 transition-transform duration-200 ring-4 ring-transparent hover:ring-primary/20">
-                  <span className="material-symbols-outlined text-3xl filled">account_balance_wallet</span>
+                <div className={`${quickActionButtonStyle} text-primary`}>
+                  <span className={iconStyle}>account_balance_wallet</span>
                 </div>
                 <span className="text-xs font-medium text-slate-300 text-center leading-tight">Meus<br />Pagamentos</span>
               </button>
