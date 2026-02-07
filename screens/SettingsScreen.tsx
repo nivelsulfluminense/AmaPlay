@@ -375,7 +375,7 @@ const SettingsScreen = () => {
     };
 
     return (
-        <div className="bg-background-dark min-h-screen pb-24">
+        <div className="bg-background-dark min-h-screen pb-6">
             {/* Header */}
             <div className="sticky top-0 z-40 bg-background-dark/95 backdrop-blur-sm border-b border-white/5 p-4">
                 <div className="flex items-center justify-between">

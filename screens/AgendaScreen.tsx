@@ -343,7 +343,7 @@ const AgendaScreen = () => {
     };
 
     return (
-        <div className="bg-background-dark min-h-screen pb-24 relative overflow-x-hidden">
+        <div className="bg-background-dark min-h-screen pb-6 relative overflow-x-hidden">
             {/* Header */}
             <div className="sticky top-0 z-40 bg-background-dark/95 backdrop-blur-sm border-b border-white/5 p-4 pb-2">
                 <div className="flex items-center justify-between">

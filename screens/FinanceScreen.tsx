@@ -554,7 +554,7 @@ const FinanceScreen = () => {
     const pendingPayments = transactions.filter(t => t.type === 'income' && t.status === 'pending');
 
     return (
-        <div className="bg-background-dark min-h-screen text-white pb-20 relative">
+        <div className="bg-background-dark min-h-screen text-white pb-6 relative">
             {/* Header */}
             <div className="flex items-center px-4 py-4 pt-6 justify-between sticky top-0 z-40 bg-background-dark/90 backdrop-blur-md">
                 <button onClick={() => window.history.back()} className="flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-white/10 transition-colors">

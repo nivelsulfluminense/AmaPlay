@@ -261,7 +261,7 @@ const InventoryScreen = () => {
   );
 
   return (
-    <div className="bg-background-dark min-h-screen pb-48 relative">
+    <div className="bg-background-dark min-h-screen pb-16 relative">
       {/* Header */}
       <div className="flex items-center p-4 pt-6 pb-2 justify-between sticky top-0 z-20 bg-background-dark/95 backdrop-blur-sm">
         <h2 className="text-white text-xl font-bold leading-tight tracking-[-0.015em] flex-1">Estoque de Materiais</h2>
@@ -417,20 +417,20 @@ const InventoryScreen = () => {
       </div>
 
       {/* Floating Action Buttons */}
-      <div className="fixed bottom-20 left-0 right-0 z-30 p-4 bg-gradient-to-t from-background-dark via-background-dark/80 to-transparent pt-10">
-        <div className="flex gap-4 max-w-lg mx-auto">
+      <div className="absolute bottom-4 left-0 right-0 z-30 p-4 pt-2 bg-gradient-to-t from-background-dark via-background-dark/80 to-transparent">
+        <div className="flex gap-3">
           <button
             onClick={handleReportProblem}
-            className="flex-1 h-14 rounded-full border border-white/20 bg-background-dark/80 backdrop-blur-md flex items-center justify-center gap-2 text-white font-bold hover:bg-white/5 active:scale-95 transition-all"
+            className="flex-1 h-12 rounded-full border border-white/20 bg-background-dark/80 backdrop-blur-md flex items-center justify-center gap-2 text-white text-sm font-bold hover:bg-white/5 active:scale-95 transition-all"
           >
-            <span className="material-symbols-outlined">assignment</span>
+            <span className="material-symbols-outlined text-lg">assignment</span>
             Relatório
           </button>
           <button
             onClick={handleOpenAdd}
-            className="flex-1 h-14 rounded-full bg-primary flex items-center justify-center gap-2 text-background-dark font-bold shadow-[0_0_20px_rgba(19,236,91,0.3)] hover:shadow-[0_0_25px_rgba(19,236,91,0.5)] active:scale-95 transition-all"
+            className="flex-1 h-12 rounded-full bg-primary flex items-center justify-center gap-2 text-background-dark text-sm font-bold shadow-[0_0_20px_rgba(19,236,91,0.3)] hover:shadow-[0_0_25px_rgba(19,236,91,0.5)] active:scale-95 transition-all"
           >
-            <span className="material-symbols-outlined">add_circle</span>
+            <span className="material-symbols-outlined text-lg">add_circle</span>
             Adicionar
           </button>
         </div>

@@ -147,7 +147,7 @@ const DashboardScreen = () => {
   const iconStyle = "material-symbols-outlined text-3xl transition-colors duration-300 group-hover:filled";
 
   return (
-    <div className="pb-28">
+    <div className="pb-6">
       {/* Sticky Header */}
       <div className="flex items-center px-6 py-4 pt-8 justify-between sticky top-0 z-20 bg-background-dark/90 backdrop-blur-lg border-b border-white/5">
         <div className="flex items-center gap-3">
