@@ -455,9 +455,9 @@ const TeamStatsScreen = () => {
 
                 {/* CARDS VIEW */}
                 {!loading && activeTab === 'cards' && (
-                    <div className="grid grid-cols-2 gap-x-1 sm:gap-x-3 gap-y-6 px-1">
+                    <div className="grid grid-cols-2 gap-x sm:gap-x 10 gap-y-6 px-1">
                         {filteredPlayers.map(player => (
-                            <div key={player.id} className="flex justify-center overflow-hidden" style={{ height: 265 }}>
+                            <div key={player.id} className="flex justify-center overflow-hidden" style={{ height: 250 }}>
                                 <PlayerCard
                                     name={player.name}
                                     ovr={player.ovr}

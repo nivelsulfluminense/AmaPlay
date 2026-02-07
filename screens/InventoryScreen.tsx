@@ -261,7 +261,7 @@ const InventoryScreen = () => {
   );
 
   return (
-    <div className="bg-background-dark min-h-screen pb-16 relative">
+    <div className="bg-background-dark min-h-screen pb-36 relative">
       {/* Header */}
       <div className="flex items-center p-4 pt-6 pb-2 justify-between sticky top-0 z-20 bg-background-dark/95 backdrop-blur-sm">
         <h2 className="text-white text-xl font-bold leading-tight tracking-[-0.015em] flex-1">Estoque de Materiais</h2>
@@ -356,7 +356,7 @@ const InventoryScreen = () => {
       </div>
 
       {/* Equipment List */}
-      <div className="flex flex-col gap-3 px-4">
+      <div className="flex flex-col gap-3 px-4 pb-10">
         {isLoading && (
           <div className="flex flex-col gap-3">
             {[1, 2, 3].map(i => <div key={i} className="h-24 bg-surface-dark rounded-xl animate-pulse" />)}
