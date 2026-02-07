@@ -37,6 +37,10 @@ const SettingsScreen = () => {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [selectedSuccessor, setSelectedSuccessor] = useState<TeamMember | null>(null);
     const [promoteToRole, setPromoteToRole] = useState<'presidente' | 'vice-presidente' | 'admin'>('admin');
+    const [ownPromotionRequest, setOwnPromotionRequest] = useState<any>(null);
+    const [pendingPromotions, setPendingPromotions] = useState<any[]>([]);
+    const [showRequestPromotionModal, setShowRequestPromotionModal] = useState(false);
+    const [requestedRole, setRequestedRole] = useState<'admin' | 'vice-presidente' | 'presidente'>('admin');
 
     const [loading, setLoading] = useState(false);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -58,11 +62,31 @@ const SettingsScreen = () => {
 
     useEffect(() => {
         loadUserSettings();
+        loadOwnPromotionRequest();
         if (isLeader) {
             loadTeamMembers();
             loadTeamSettings();
+            loadPendingPromotions();
         }
     }, [isLeader]);
+
+    const loadOwnPromotionRequest = async () => {
+        try {
+            const request = await (dataService as any).promotions.getOwnRequest();
+            setOwnPromotionRequest(request);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const loadPendingPromotions = async () => {
+        try {
+            const requests = await (dataService as any).promotions.listPending();
+            setPendingPromotions(requests);
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
     const loadTeamSettings = async () => {
         if (!teamId) return;
@@ -254,6 +278,34 @@ const SettingsScreen = () => {
             showError(error.message || 'Erro ao enviar promoção');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleRequestPromotion = async () => {
+        setLoading(true);
+        try {
+            await (dataService as any).promotions.request(requestedRole);
+            showSuccess(`Solicitação para ${getRoleLabel(requestedRole)} enviada com sucesso!`);
+            setShowRequestPromotionModal(false);
+            await loadOwnPromotionRequest();
+        } catch (error: any) {
+            showError(error.message || 'Erro ao solicitar promoção');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRespondToPromotionRequest = async (requestId: string, status: 'approved' | 'rejected') => {
+        setActionLoading(requestId);
+        try {
+            await (dataService as any).promotions.respond(requestId, status);
+            showSuccess(status === 'approved' ? 'Promoção aprovada!' : 'Promoção recusada.');
+            await loadPendingPromotions();
+            await loadTeamMembers();
+        } catch (error: any) {
+            showError(error.message || 'Erro ao processar solicitação');
+        } finally {
+            setActionLoading(null);
         }
     };
 
@@ -530,6 +582,41 @@ const SettingsScreen = () => {
                         </div>
                     </div>
 
+                    {/* Promotion Request - NEW */}
+                    {role !== 'presidente' && (
+                        <div className="bg-surface-dark rounded-2xl border border-white/5 p-6 overflow-hidden relative">
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full -mr-8 -mt-8"></div>
+                            <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary">auto_graph</span>
+                                Solicitar Promoção
+                            </h3>
+
+                            {ownPromotionRequest ? (
+                                <div className="bg-background-dark p-4 rounded-xl border border-primary/20">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Status da Solicitação</span>
+                                        <span className="px-2 py-1 rounded-full bg-orange-500/20 text-orange-400 text-[10px] font-bold uppercase">Pendente</span>
+                                    </div>
+                                    <p className="text-white font-bold">Solicitou ser {getRoleLabel(ownPromotionRequest.requested_role)}</p>
+                                    <p className="text-slate-400 text-xs mt-1">Aguardando aprovação do Presidente ou Vice.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <p className="text-slate-400 text-sm mb-4">
+                                        Deseja assumir mais responsabilidades no time? Solicite uma promoção!
+                                    </p>
+                                    <button
+                                        onClick={() => setShowRequestPromotionModal(true)}
+                                        className="w-full py-3 bg-primary text-background-dark font-bold rounded-xl hover:bg-primary-dark transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
+                                    >
+                                        <span className="material-symbols-outlined">star</span>
+                                        Solicitar Novo Cargo
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    )}
+
                     {/* Danger Zone */}
                     <div className="bg-red-500/10 rounded-2xl border border-red-500/20 p-6">
                         <h3 className="text-red-500 font-bold text-lg mb-4 flex items-center gap-2">
@@ -675,7 +762,7 @@ const SettingsScreen = () => {
                             <div className="absolute top-0 left-0 w-1 h-full bg-yellow-500"></div>
                             <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
                                 <span className="material-symbols-outlined text-yellow-500">person_add</span>
-                                Solicitações Pendentes
+                                Solicitações de Entrada
                             </h3>
                             <div className="space-y-3">
                                 {pendingMembers.map((p) => (
@@ -704,6 +791,59 @@ const SettingsScreen = () => {
                                                 className="flex-1 py-2 bg-red-500/10 text-red-500 font-bold rounded-lg text-sm hover:bg-red-500/20 transition-colors flex justify-center items-center gap-2 disabled:opacity-50"
                                             >
                                                 {actionLoading === p.id ? <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> : <span className="material-symbols-outlined text-sm">close</span>}
+                                                Recusar
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Pending Promotion Requests - NEW */}
+                    {pendingPromotions.length > 0 && (
+                        <div className="bg-surface-dark rounded-2xl border border-primary/20 p-6 relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
+                            <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary">auto_graph</span>
+                                Solicitações de Promoção
+                            </h3>
+                            <div className="space-y-3">
+                                {pendingPromotions.map((p) => (
+                                    <div key={p.id} className="bg-background-dark p-4 rounded-xl border border-white/5 flex flex-col gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="size-12 rounded-full overflow-hidden border border-white/10 shrink-0">
+                                                <img src={p.profiles?.avatar || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" alt={p.profiles?.name} />
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-white font-bold">{p.profiles?.name}</p>
+                                                <p className="text-xs text-slate-400">
+                                                    Status atual: <span className="text-white uppercase font-bold">{getRoleLabel(p.profiles?.role)}</span>
+                                                </p>
+                                                <div className="flex items-center gap-1.5 mt-1">
+                                                    <span className="text-[10px] bg-white/5 text-slate-300 px-1.5 py-0.5 rounded">SOLICITOU</span>
+                                                    <span className="material-symbols-outlined text-sm text-primary">arrow_forward</span>
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-black text-white ${getRoleBadgeColor(p.requested_role)}`}>
+                                                        {getRoleLabel(p.requested_role).toUpperCase()}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleRespondToPromotionRequest(p.id, 'approved')}
+                                                disabled={actionLoading === p.id}
+                                                className="flex-1 py-2 bg-primary text-background-dark font-bold rounded-lg text-sm hover:bg-primary-dark transition-colors flex justify-center items-center gap-2 disabled:opacity-50"
+                                            >
+                                                {actionLoading === p.id ? <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> : <span className="material-symbols-outlined text-sm font-bold">done_all</span>}
+                                                Aceitar Promoção
+                                            </button>
+                                            <button
+                                                onClick={() => handleRespondToPromotionRequest(p.id, 'rejected')}
+                                                disabled={actionLoading === p.id}
+                                                className="flex-1 py-2 bg-red-500/10 text-red-400 font-bold rounded-lg text-sm hover:bg-red-500/20 transition-colors flex justify-center items-center gap-2 disabled:opacity-50"
+                                            >
+                                                {actionLoading === p.id ? <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> : <span className="material-symbols-outlined text-sm">block</span>}
                                                 Recusar
                                             </button>
                                         </div>
@@ -1008,6 +1148,76 @@ const SettingsScreen = () => {
                             <button
                                 onClick={() => setShowDeleteModal(false)}
                                 className="w-full py-4 rounded-xl border border-white/10 text-slate-300 font-bold hover:bg-white/5 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* REQUEST PROMOTION MODAL */}
+            {showRequestPromotionModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-surface-dark w-full max-w-md rounded-3xl border border-white/10 p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+                        <h3 className="text-white font-bold text-xl mb-2">Solicitar Promoção</h3>
+                        <p className="text-slate-400 mb-6">Escolha o cargo que deseja solicitar para a gestão do seu time:</p>
+
+                        <div className="space-y-3 mb-8">
+                            <button
+                                onClick={() => setRequestedRole('admin')}
+                                className={`w-full p-4 rounded-2xl border-2 text-left transition-all ${requestedRole === 'admin' ? 'border-primary bg-primary/10' : 'border-white/5 bg-background-dark/50'}`}
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-white font-bold">Administrador</span>
+                                    {requestedRole === 'admin' && <span className="material-symbols-outlined text-primary text-sm">check_circle</span>}
+                                </div>
+                                <p className="text-slate-400 text-xs italic">Ajuda na organização de jogos e scouts.</p>
+                            </button>
+
+                            <button
+                                onClick={() => setRequestedRole('vice-presidente')}
+                                className={`w-full p-4 rounded-2xl border-2 text-left transition-all ${requestedRole === 'vice-presidente' ? 'border-primary bg-primary/10' : 'border-white/5 bg-background-dark/50'}`}
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-white font-bold">Vice-Presidente</span>
+                                    {requestedRole === 'vice-presidente' && <span className="material-symbols-outlined text-primary text-sm">check_circle</span>}
+                                </div>
+                                <p className="text-slate-400 text-xs italic">Gestão do time, financeiro e membros.</p>
+                            </button>
+
+                            <button
+                                onClick={() => setRequestedRole('presidente')}
+                                className={`w-full p-4 rounded-2xl border-2 text-left transition-all ${requestedRole === 'presidente' ? 'border-primary bg-primary/10' : 'border-white/5 bg-background-dark/50'}`}
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-white font-bold">Presidente</span>
+                                    {requestedRole === 'presidente' && <span className="material-symbols-outlined text-primary text-sm">check_circle</span>}
+                                </div>
+                                <p className="text-slate-400 text-xs italic">Liderança máxima e controle total do esquadrão.</p>
+                            </button>
+                        </div>
+
+                        {requestedRole !== 'admin' && (
+                            <div className="mb-6 p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-start gap-3">
+                                <span className="material-symbols-outlined text-orange-500 text-lg">info</span>
+                                <p className="text-[10px] text-orange-200 leading-tight">
+                                    <strong>REGRA DE TROCA:</strong> Como o time só pode ter um {getRoleLabel(requestedRole)}, se sua solicitação for aceita, você <strong>trocará de cargo</strong> com o atual ocupante automaticamente.
+                                </p>
+                            </div>
+                        )}
+
+                        <div className="flex flex-col gap-3">
+                            <button
+                                onClick={handleRequestPromotion}
+                                disabled={loading}
+                                className="w-full py-4 bg-primary text-background-dark font-bold rounded-xl hover:bg-primary-dark transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                            >
+                                {loading ? <span className="material-symbols-outlined animate-spin">progress_activity</span> : <span className="material-symbols-outlined">send</span>}
+                                Enviar Solicitação
+                            </button>
+                            <button
+                                onClick={() => setShowRequestPromotionModal(false)}
+                                className="w-full py-3 text-slate-400 font-bold hover:text-white transition-colors"
                             >
                                 Cancelar
                             </button>

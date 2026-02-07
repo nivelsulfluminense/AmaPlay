@@ -1547,4 +1547,67 @@ export const dataService = {
             if (error) throw error;
         }
     },
+
+    promotions: {
+        async request(role: string) {
+            const teamId = await getCurrentTeamId();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user || !teamId) throw new Error('Dados incompletos');
+
+            const { data, error } = await supabase
+                .from('promotion_requests')
+                .insert({
+                    user_id: user.id,
+                    team_id: teamId,
+                    requested_role: role,
+                    status: 'pending'
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        },
+
+        async listPending() {
+            const teamId = await getCurrentTeamId();
+            if (!teamId) return [];
+
+            const { data, error } = await supabase
+                .from('promotion_requests')
+                .select(`
+                    *,
+                    profiles:user_id (name, avatar, role)
+                `)
+                .eq('team_id', teamId)
+                .eq('status', 'pending');
+
+            if (error) throw error;
+            return data;
+        },
+
+        async getOwnRequest() {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return null;
+
+            const { data, error } = await supabase
+                .from('promotion_requests')
+                .select('*')
+                .eq('user_id', user.id)
+                .eq('status', 'pending')
+                .maybeSingle();
+
+            if (error) return null;
+            return data;
+        },
+
+        async respond(requestId: string, status: 'approved' | 'rejected') {
+            const { error } = await supabase
+                .from('promotion_requests')
+                .update({ status })
+                .eq('id', requestId);
+
+            if (error) throw error;
+        }
+    }
 };

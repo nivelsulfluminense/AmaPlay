@@ -304,16 +304,6 @@ const DashboardScreen = () => {
             </button>
 
             <button
-              onClick={() => navigate('/player-stats')}
-              className="flex flex-col items-center gap-3 group"
-            >
-              <div className={`${quickActionButtonStyle} text-primary`}>
-                <span className={iconStyle}>hexagon</span>
-              </div>
-              <span className="text-xs font-medium text-slate-300 text-center leading-tight">Overall</span>
-            </button>
-
-            <button
               onClick={() => navigate('/team-stats')}
               className="flex flex-col items-center gap-3 group"
             >
