@@ -92,7 +92,7 @@ const BottomNav = () => {
   const isAdmin = role === 'presidente' || role === 'vice-presidente' || role === 'admin';
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 h-20 bg-background-dark/80 backdrop-blur-xl border-t border-white/5 px-6 flex items-center justify-around z-50">
+    <nav className="absolute bottom-0 left-0 w-full h-20 bg-background-dark/80 backdrop-blur-xl border-t border-white/5 px-6 flex items-center justify-around z-50">
       <button
         onClick={() => navigate('/dashboard')}
         className={`flex flex-col items-center gap-1 transition-all ${location.pathname === '/dashboard' ? 'text-primary' : 'text-slate-500'}`}
@@ -143,7 +143,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
   useAuthRedirect();
   return (
     <div className="min-h-screen w-full bg-background-dark flex justify-center">
-      <div className="w-full max-w-md relative bg-background-dark min-h-screen shadow-2xl overflow-hidden flex flex-col">
+      <div className="w-full max-w-md relative bg-background-dark h-screen shadow-2xl overflow-hidden flex flex-col">
         <div className="flex-1 overflow-y-auto no-scrollbar pb-24">
           <AuthGuard>
             <>{children}</>

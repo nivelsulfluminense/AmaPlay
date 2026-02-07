@@ -192,8 +192,8 @@ const FinanceScreen = () => {
             const currentMonth = now.getMonth() + 1;
             const currentYear = now.getFullYear();
 
-            // October 2025 as the specific start per request
-            const startLimit = feeStartDate ? new Date(feeStartDate) : new Date(2025, 9, 1); // 9 is October (0-indexed)
+            // December 2025 as the specific start per request
+            const startLimit = feeStartDate ? new Date(feeStartDate) : new Date(2025, 11, 1); // 11 is December (0-indexed)
             startLimit.setDate(1);
 
             const dateCursor = new Date(startLimit);
@@ -716,14 +716,29 @@ const FinanceScreen = () => {
                                     <span className="material-symbols-outlined">{t.type === 'expense' ? 'receipt_long' : 'payments'}</span>
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-white font-medium truncate">{t.description}</p>
-                                        {t.status === 'pending' && <span className="text-[10px] bg-yellow-500/20 text-yellow-500 px-1.5 rounded uppercase font-black">Validando</span>}
+                                    <div className="flex flex-col gap-0.5">
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-white font-bold text-sm truncate">{t.description}</p>
+                                            {t.status === 'pending' && <span className="text-[10px] bg-yellow-500/20 text-yellow-500 px-1.5 rounded uppercase font-black">Validando</span>}
+                                        </div>
+
+                                        {/* Reference Month Display */}
+                                        {t.category === 'Mensalidade' && t.referenceMonth && (
+                                            <p className="text-xs text-primary/90 font-medium">
+                                                Ref: <span className="uppercase font-bold">{monthsNames[t.referenceMonth - 1]}/{t.referenceYear}</span>
+                                            </p>
+                                        )}
+
+                                        <p className="text-slate-500 text-[10px] flex items-center gap-1">
+                                            <span>{new Date(t.date).toLocaleDateString()}</span>
+                                            {t.createdByName && (
+                                                <>
+                                                    <span>•</span>
+                                                    <span className="italic">Lançado por: {t.createdByName}</span>
+                                                </>
+                                            )}
+                                        </p>
                                     </div>
-                                    <p className="text-gray-500 text-xs">
-                                        {new Date(t.date).toLocaleDateString()}
-                                        {t.createdByName && <span className="ml-2 text-slate-600 italic">| Por: {t.createdByName}</span>}
-                                    </p>
                                 </div>
                                 <div className="text-right">
                                     <p className={`font-black ${t.type === 'expense' ? 'text-white' : 'text-primary'}`}>

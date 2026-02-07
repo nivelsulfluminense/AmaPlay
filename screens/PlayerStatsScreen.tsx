@@ -76,7 +76,7 @@ type ExportFormat = 'png' | 'jpeg' | 'svg';
 
 const PlayerStatsScreen = () => {
     const navigate = useNavigate();
-    const { userId, name, avatar, cardAvatar, setCardAvatar, teamId, stats, ovr, teamDetails, setStats, position, setPosition, birthDate } = useUser();
+    const { userId, name, avatar, cardAvatar, setCardAvatar, teamId, stats, ovr, teamDetails, setStats, position, setPosition, birthDate, address, refreshProfile } = useUser();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const cardRef = useRef<HTMLDivElement>(null);
 
@@ -153,21 +153,31 @@ const PlayerStatsScreen = () => {
     });
 
     // Persistence
-    const [country, setCountry] = useState(() => localStorage.getItem('amaplay_player_country') || '');
+    const [country, setCountry] = useState(() => (address?.country || localStorage.getItem('amaplay_player_country') || ''));
     const [heartTeamId] = useState(() => localStorage.getItem('amaplay_heart_team') || 'fla');
     const [customTextColor, setCustomTextColor] = useState(() => localStorage.getItem('amaplay_card_text_color') || '');
 
-    const [isEditing, setIsEditing] = useState(() => !localStorage.getItem('amaplay_player_country'));
+    // Determines if we are in Edit Mode (Setup) or View Mode
+    // Logic: If we have basic card info (position, country, and card avatar/photo), we are good.
+    // We check both Context/DB (address.country) AND LocalStorage for valid country.
+    const [isEditing, setIsEditing] = useState(() => {
+        const hasCountry = !!(address?.country || localStorage.getItem('amaplay_player_country'));
+        const hasImage = !!(cardAvatar || avatar || localStorage.getItem('amaplay_player_avatar')); // Check for any available image
+
+        // The prompt says "card completo: nome, posicao, imagem, nacionalidade".
+        // If critical info is missing, default to Edit Mode.
+        return !(hasCountry && hasImage);
+    });
 
     // We use cardAvatar from context if it exists, otherwise we might initialize from avatar if user consents
     const [localAvatar, setLocalAvatar] = useState(cardAvatar || null);
 
     // Image Manipulation State
-    const [imgScale, setImgScale] = useState(0.85);
-    const [imgPosX, setImgPosX] = useState(0);
-    const [imgPosY, setImgPosY] = useState(40);
+    const [imgScale, setImgScale] = useState(address?.cardImageSettings?.scale ?? 0.85);
+    const [imgPosX, setImgPosX] = useState(address?.cardImageSettings?.x ?? 0);
+    const [imgPosY, setImgPosY] = useState(address?.cardImageSettings?.y ?? 40);
     // Controls the gradient mask starting point (percentage)
-    const [maskStart, setMaskStart] = useState(80);
+    const [maskStart, setMaskStart] = useState(address?.cardImageSettings?.mask ?? 80);
 
     // Background Removal State
     const [removeBg, setRemoveBg] = useState(false);
@@ -433,9 +443,12 @@ const PlayerStatsScreen = () => {
                 await dataService.players.save({
                     id: userId,
                     position: selectedPosition, // Save Position
-                    address: { ...currentAddress, country },
+                    address: { ...currentAddress, country, cardImageSettings: { scale: imgScale, x: imgPosX, y: imgPosY, mask: maskStart } },
                     cardAvatar: localAvatar
                 });
+
+                // Refresh context to ensure address is up to date
+                await refreshProfile();
             }
 
             // SAVE ONLY TO CARD AVATAR

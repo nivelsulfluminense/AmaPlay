@@ -90,6 +90,7 @@ interface UserContextType {
   heartTeam: string | null;
   position: 'GOL' | 'ZAG' | 'MEI' | 'ATA' | null;
   setPosition: (pos: 'GOL' | 'ZAG' | 'MEI' | 'ATA' | null) => void;
+  address: any; // Used for nationality/country
   isApproved: boolean; // Agora booleano
   isPro: boolean;
   birthDate: string | null;
@@ -125,6 +126,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [ovr, setOvrState] = useState(50);
   const [heartTeam, setHeartTeamState] = useState<string | null>(null);
   const [position, setPositionState] = useState<'GOL' | 'ZAG' | 'MEI' | 'ATA' | null>(null);
+  const [address, setAddressState] = useState<any>(null);
   const [status, setStatus] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -172,6 +174,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     if (userData.ovr) setOvrState(userData.ovr);
     if (userData.heart_team) setHeartTeamState(userData.heart_team);
     if (userData.position) setPositionState(userData.position);
+    if (userData.address) setAddressState(userData.address);
     if (userData.birth_date || userData.birthDate) setBirthDate(userData.birth_date || userData.birthDate);
 
     const rawTeamDetails = userData.teamDetails;
@@ -1134,13 +1137,14 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     heartTeam,
     position,
     setPosition: setPositionState,
+    address,
     isLoading,
     isInitialized,
     error,
     clearError
   }), [
     userId, role, name, email, avatar, cardAvatar, stats, ovr, teamDetails, teamId,
-    isSetupComplete, status, isFirstManager, isApproved, isPro, intendedRole, heartTeam, position, birthDate, isLoading, isInitialized, error,
+    isSetupComplete, status, isFirstManager, isApproved, isPro, intendedRole, heartTeam, position, address, birthDate, isLoading, isInitialized, error,
     notifications, unreadCount
   ]);
 

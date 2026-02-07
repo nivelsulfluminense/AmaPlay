@@ -93,6 +93,13 @@ export interface Player {
         state?: string;
         number?: string;
         country?: string;
+        cardImageSettings?: {
+            scale: number;
+            x: number;
+            y: number;
+            mask: number;
+        };
+        [key: string]: any;
     };
     stats: PlayerStats;
     ovr: number;
