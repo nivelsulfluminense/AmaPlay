@@ -15,9 +15,33 @@ const InventoryScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [items, setItems] = useState<InventoryItem[]>([]);
 
+  // Preset Items Definition
+  const PRESET_ITEMS = [
+    { name: 'Bola', icon: 'sports_soccer' },
+    { name: 'Rede', icon: 'grid_on' },
+    { name: 'Luva', icon: 'pan_tool' },
+    { name: 'Saco de bolas', icon: 'shopping_bag' },
+    { name: 'Saco de rede', icon: 'shopping_basket' },
+    { name: 'Meião', icon: 'checkroom' },
+    { name: 'Chuteira', icon: 'hiking' },
+    { name: 'Colete', icon: 'vest' },
+    { name: 'Camisa do time', icon: 'styler' },
+    { name: 'Apito', icon: 'sports' },
+    { name: 'Cronômetro', icon: 'timer' },
+    { name: 'Galão de água', icon: 'water_drop' },
+    { name: 'Pasta', icon: 'folder' },
+    { name: 'Outros', icon: 'category' }
+  ];
+
+  const getItemIcon = (itemName: string) => {
+    const preset = PRESET_ITEMS.find(p => p.name.toLowerCase() === itemName.toLowerCase());
+    return preset ? preset.icon : 'inventory_2';
+  };
+
   // Form State
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [formName, setFormName] = useState('');
+  const [selectedPreset, setSelectedPreset] = useState(PRESET_ITEMS[0].name);
+  const [customName, setCustomName] = useState('');
   const [formQty, setFormQty] = useState('');
   const [formMaxQty, setFormMaxQty] = useState('');
   const [formCategory, setFormCategory] = useState('Equipamento');
@@ -114,7 +138,8 @@ const InventoryScreen = () => {
 
   const handleOpenAdd = () => {
     setEditingId(null);
-    setFormName('');
+    setSelectedPreset(PRESET_ITEMS[0].name);
+    setCustomName('');
     setFormQty('');
     setFormMaxQty('');
     setFormCategory('Equipamento');
@@ -125,7 +150,17 @@ const InventoryScreen = () => {
 
   const handleOpenEdit = (item: InventoryItem) => {
     setEditingId(item.id);
-    setFormName(item.name);
+
+    // Check if name is in presets
+    const isPreset = PRESET_ITEMS.some(p => p.name === item.name);
+    if (isPreset) {
+      setSelectedPreset(item.name);
+      setCustomName('');
+    } else {
+      setSelectedPreset('Outros');
+      setCustomName(item.name);
+    }
+
     setFormQty(item.quantity.toString());
     setFormMaxQty(item.maxQuantity.toString());
     setFormCategory(item.category);
@@ -135,18 +170,20 @@ const InventoryScreen = () => {
   };
 
   const handleSaveItem = async () => {
-    if (!formName || !formQty) return;
+    const finalName = selectedPreset === 'Outros' ? customName : selectedPreset;
+
+    if (!finalName || !formQty) return;
 
     const qty = parseInt(formQty);
     const max = formMaxQty ? parseInt(formMaxQty) : qty;
 
     const newItemData = {
-      name: formName,
+      name: finalName,
       category: formCategory,
       quantity: qty,
       maxQuantity: max,
       status: formStatus,
-      image: "https://cdn-icons-png.flaticon.com/512/679/679720.png",
+      image: "", // We rely on name -> icon mapping now, or backend defaults
       color: determineColor(formStatus),
       responsibleId: formResponsibleId
     };
@@ -330,7 +367,9 @@ const InventoryScreen = () => {
           const percentage = Math.min((item.quantity / item.maxQuantity) * 100, 100);
           return (
             <div key={item.id} className="group flex items-center gap-4 bg-surface-dark rounded-xl p-3 pr-4 shadow-sm border border-white/5 transition-transform active:scale-[0.99]">
-              <div className="bg-center bg-no-repeat bg-contain rounded-lg size-16 shrink-0 bg-white/5 p-2" style={{ backgroundImage: `url('${item.image}')` }}></div>
+              <div className="flex items-center justify-center rounded-lg size-16 shrink-0 bg-white/5 p-2 text-primary border border-white/5">
+                <span className="material-symbols-outlined text-3xl drop-shadow-md">{getItemIcon(item.name)}</span>
+              </div>
               <div className="flex flex-col justify-center flex-1 min-w-0">
                 <div className="flex justify-between items-start">
                   <p className="text-white text-base font-bold leading-normal truncate pr-2">{item.name}</p>
@@ -418,15 +457,36 @@ const InventoryScreen = () => {
 
             <div className="space-y-4">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 uppercase">Nome do Item</label>
-                <input
-                  type="text"
-                  className="w-full bg-background-dark border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-primary focus:border-primary"
-                  placeholder="Ex: Bomba de Ar"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                />
+                <label className="text-xs font-bold text-slate-400 uppercase">Item</label>
+                <div className="relative">
+                  <select
+                    className="w-full bg-background-dark border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-primary focus:border-primary appearance-none"
+                    value={selectedPreset}
+                    onChange={(e) => setSelectedPreset(e.target.value)}
+                  >
+                    {PRESET_ITEMS.map(item => (
+                      <option key={item.name} value={item.name}>{item.name}</option>
+                    ))}
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                    <span className="material-symbols-outlined">expand_more</span>
+                  </div>
+                </div>
               </div>
+
+              {selectedPreset === 'Outros' && (
+                <div className="space-y-1 animate-in fade-in zoom-in-95 duration-200">
+                  <label className="text-xs font-bold text-slate-400 uppercase">Nome do Item</label>
+                  <input
+                    type="text"
+                    className="w-full bg-background-dark border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-primary focus:border-primary"
+                    placeholder="Digite o nome do item..."
+                    value={customName}
+                    onChange={(e) => setCustomName(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
@@ -507,8 +567,8 @@ const InventoryScreen = () => {
               </button>
               <button
                 onClick={handleSaveItem}
-                disabled={!formName || !formQty || isLoading}
-                className={`flex-1 py-3 rounded-xl bg-primary text-background-dark font-bold hover:bg-primary-dark ${(!formName || !formQty || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={!(selectedPreset === 'Outros' ? customName : selectedPreset) || !formQty || isLoading}
+                className={`flex-1 py-3 rounded-xl bg-primary text-background-dark font-bold hover:bg-primary-dark ${(!(selectedPreset === 'Outros' ? customName : selectedPreset) || !formQty || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {isLoading ? 'Salvando...' : 'Salvar'}
               </button>
