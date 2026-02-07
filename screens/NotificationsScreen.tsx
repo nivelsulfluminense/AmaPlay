@@ -54,15 +54,15 @@ const NotificationsScreen = () => {
                         <div
                             key={notification.id}
                             className={`relative p-4 rounded-xl border ${notification.status === 'pending'
-                                    ? 'bg-surface-dark border-primary/20 shadow-[0_0_15px_rgba(19,236,91,0.05)]'
-                                    : 'bg-surface-dark/50 border-white/5 opacity-70'
+                                ? 'bg-surface-dark border-primary/20 shadow-[0_0_15px_rgba(19,236,91,0.05)]'
+                                : 'bg-surface-dark/50 border-white/5 opacity-70'
                                 }`}
                         >
                             <div className="flex justify-between items-start mb-2">
                                 <div className="flex items-center gap-2">
                                     <div className={`w-2 h-2 rounded-full ${notification.status === 'pending' ? 'bg-primary animate-pulse' : 'bg-slate-600'}`}></div>
                                     <span className="text-xs font-bold text-primary uppercase tracking-wider">
-                                        {notification.type === 'promotion_invite' ? 'Promoção' : 'Aviso'}
+                                        {notification.type === 'promotion_invite' ? 'Promoção' : notification.type === 'team_join' ? 'Novo Atleta' : 'Aviso'}
                                     </span>
                                 </div>
                                 <span className="text-[10px] text-slate-500">
@@ -70,8 +70,31 @@ const NotificationsScreen = () => {
                                 </span>
                             </div>
 
-                            <h3 className="font-bold text-lg mb-1">{notification.title}</h3>
-                            <p className="text-sm text-slate-300 mb-4 leading-relaxed">{notification.message}</p>
+                            <div className="flex items-start gap-4 mb-3">
+                                {notification.type === 'team_join' && notification.data?.avatar ? (
+                                    <img
+                                        src={notification.data.avatar}
+                                        className="w-12 h-12 rounded-full border-2 border-primary/20 object-cover shrink-0"
+                                        alt=""
+                                    />
+                                ) : notification.type === 'team_join' ? (
+                                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 shrink-0">
+                                        <span className="material-symbols-outlined text-slate-500 text-2xl">person</span>
+                                    </div>
+                                ) : (
+                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${notification.type === 'promotion_invite' ? 'bg-primary/10 text-primary' : 'bg-blue-500/10 text-blue-400'
+                                        }`}>
+                                        <span className="material-symbols-outlined text-2xl">
+                                            {notification.type === 'promotion_invite' ? 'military_tech' : 'notifications'}
+                                        </span>
+                                    </div>
+                                )}
+
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="font-bold text-base text-white truncate">{notification.title}</h3>
+                                    <p className="text-sm text-slate-400 leading-snug mt-0.5 line-clamp-2">{notification.message}</p>
+                                </div>
+                            </div>
 
                             {notification.type === 'promotion_invite' && notification.status === 'pending' && (
                                 <div className="flex gap-3 mt-4">
