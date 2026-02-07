@@ -19,6 +19,7 @@ interface PlayerCardProps {
     teamLogo?: string;
     heartTeamLogo?: string;
     customTextColor?: string | null;
+    birthDate?: string | null;
     scale?: number;
     className?: string; // Additional classes
     onClick?: () => void;
@@ -28,6 +29,19 @@ const getCardTier = (ovr: number) => {
     if (ovr >= 80) return 'gold';
     if (ovr >= 75) return 'silver';
     return 'bronze';
+};
+
+const calculateAge = (birthDate: string | null | undefined): number => {
+    if (!birthDate) return 0;
+    const today = new Date();
+    const birth = new Date(birthDate);
+    if (isNaN(birth.getTime())) return 0;
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+        age--;
+    }
+    return age;
 };
 
 const cardStyles = {
@@ -54,6 +68,14 @@ const cardStyles = {
         border: "border-[#ebdccb]",
         text: "text-[#3d2411]",
         divider: "bg-[#3d2411]/30",
+    },
+    icon: {
+        bgImage: "https://www.globalfootballplatform.com/wp-content/uploads/2025/12/fc25-icon.png",
+        bg: "bg-[#ffffff]",
+        gradient: "bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#ffffff] via-[#e2e2e2] to-[#c0c0c0]",
+        border: "border-[#e2e2e2]",
+        text: "text-[#1a1a1a]",
+        divider: "bg-[#1a1a1a]/30",
     }
 };
 
@@ -67,11 +89,13 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
     teamLogo,
     heartTeamLogo,
     customTextColor,
+    birthDate,
     scale = 1,
     className = "",
     onClick
 }) => {
-    const tier = getCardTier(ovr);
+    const age = calculateAge(birthDate);
+    const tier = age >= 60 ? 'icon' : getCardTier(ovr);
     const style = cardStyles[tier as keyof typeof cardStyles];
     const activeCardBg = style.bgImage;
 

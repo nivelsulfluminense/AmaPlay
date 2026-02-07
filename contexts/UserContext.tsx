@@ -89,8 +89,11 @@ interface UserContextType {
   setIntendedRole: (role: Role) => Promise<void>;
   heartTeam: string | null;
   position: 'GOL' | 'ZAG' | 'MEI' | 'ATA' | null;
+  setPosition: (pos: 'GOL' | 'ZAG' | 'MEI' | 'ATA' | null) => void;
   isApproved: boolean; // Agora booleano
   isPro: boolean;
+  birthDate: string | null;
+  setBirthDate: (date: string | null) => void;
   refreshProfile: () => Promise<void>;
 }
 
@@ -125,6 +128,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [status, setStatus] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [birthDate, setBirthDate] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Lógica auxiliar para aplicar dados do perfil em vários estados de forma eficiente
@@ -168,6 +172,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     if (userData.ovr) setOvrState(userData.ovr);
     if (userData.heart_team) setHeartTeamState(userData.heart_team);
     if (userData.position) setPositionState(userData.position);
+    if (userData.birth_date || userData.birthDate) setBirthDate(userData.birth_date || userData.birthDate);
 
     const rawTeamDetails = userData.teamDetails;
     if (rawTeamDetails) {
@@ -1102,6 +1107,8 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     isFirstManager,
     isApproved, // Added missing export
     isPro,
+    birthDate,
+    setBirthDate,
     refreshProfile,
     login,
     register,
@@ -1126,13 +1133,14 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     setIntendedRole,
     heartTeam,
     position,
+    setPosition: setPositionState,
     isLoading,
     isInitialized,
     error,
     clearError
   }), [
     userId, role, name, email, avatar, cardAvatar, stats, ovr, teamDetails, teamId,
-    isSetupComplete, status, isFirstManager, isApproved, isPro, intendedRole, heartTeam, position, isLoading, isInitialized, error,
+    isSetupComplete, status, isFirstManager, isApproved, isPro, intendedRole, heartTeam, position, birthDate, isLoading, isInitialized, error,
     notifications, unreadCount
   ]);
 

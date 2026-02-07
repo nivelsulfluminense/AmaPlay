@@ -606,10 +606,10 @@ export const dataService = {
                 .from('player_votes')
                 .upsert({
                     voter_id: user.id,
-                    target_id: targetId,
+                    target_user_id: targetId,
                     ...stats,
                     updated_at: new Date().toISOString()
-                }, { onConflict: 'voter_id,target_id' });
+                }, { onConflict: 'voter_id,target_user_id' });
 
             if (error) throw error;
         },
@@ -622,7 +622,7 @@ export const dataService = {
                 .from('player_votes')
                 .select('*')
                 .eq('voter_id', user.id)
-                .eq('target_id', targetId)
+                .eq('target_user_id', targetId)
                 .single();
 
             if (error || !data) return null;

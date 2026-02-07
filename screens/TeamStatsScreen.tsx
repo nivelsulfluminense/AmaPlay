@@ -467,6 +467,7 @@ const TeamStatsScreen = () => {
                                     countryFlag={getFlagUrl(player.address?.country)}
                                     teamLogo={teamDetails?.logo || undefined}
                                     heartTeamLogo={PRO_TEAMS.find(t => t.id === player.heartTeamId)?.logo}
+                                    birthDate={player.birthDate}
                                     scale={0.42}
                                     className="shadow-lg origin-top"
                                     onClick={() => setSelectedPlayer(player)}
@@ -745,6 +746,7 @@ const TeamStatsScreen = () => {
                             countryFlag={getFlagUrl(selectedPlayer.address?.country)}
                             teamLogo={teamDetails?.logo || undefined}
                             heartTeamLogo={PRO_TEAMS.find(t => t.id === selectedPlayer.heartTeamId)?.logo}
+                            birthDate={selectedPlayer.birthDate}
                             scale={0.85}
                             className="shadow-2xl"
                         />

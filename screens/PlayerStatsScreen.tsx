@@ -76,16 +76,18 @@ type ExportFormat = 'png' | 'jpeg' | 'svg';
 
 const PlayerStatsScreen = () => {
     const navigate = useNavigate();
-    const { userId, name, avatar, cardAvatar, setCardAvatar, teamId, stats, ovr, teamDetails, setStats } = useUser();
+    const { userId, name, avatar, cardAvatar, setCardAvatar, teamId, stats, ovr, teamDetails, setStats, position, setPosition, birthDate } = useUser();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const cardRef = useRef<HTMLDivElement>(null);
 
-    // Load Saved Position
-    const [positionCode] = useState(() => localStorage.getItem('amaplay_player_position') || 'mid');
+    // Initial Position State (from Context or default)
+    const [selectedPosition, setSelectedPosition] = useState<'GOL' | 'ZAG' | 'MEI' | 'ATA'>(position || 'MEI');
 
-    // Map Position Code to Display Text
-    const posMap: Record<string, string> = { gk: 'GOL', def: 'ZAG', mid: 'MEI', fwd: 'ATA' };
-    const displayPos = posMap[positionCode] || 'MEI';
+    useEffect(() => {
+        if (position) setSelectedPosition(position);
+    }, [position]);
+
+    const displayPos = selectedPosition || 'MEI';
 
     // Stats Logic - My Stats
     const [myStats, setMyStats] = useState(stats);
@@ -119,12 +121,12 @@ const PlayerStatsScreen = () => {
             if (user) {
                 const { data: votes } = await supabase
                     .from('player_votes')
-                    .select('target_id, pace, shooting, passing, dribbling, defending, physical')
+                    .select('target_user_id, pace, shooting, passing, dribbling, defending, physical')
                     .eq('voter_id', user.id);
 
                 const voteMap: Record<string, any> = {};
                 votes?.forEach(v => {
-                    voteMap[v.target_id] = {
+                    voteMap[v.target_user_id] = {
                         pace: v.pace,
                         shooting: v.shooting,
                         passing: v.passing,
@@ -196,20 +198,49 @@ const PlayerStatsScreen = () => {
     const [exportFormat, setExportFormat] = useState<ExportFormat>('png');
     const [isExporting, setIsExporting] = useState(false);
 
-    // Calculate Overall Helper
-    const calculateOvr = (stats: any) => Math.round(
-        (stats.pace + stats.shooting + stats.passing + stats.dribbling + stats.defending + stats.physical) / 6
-    );
+    const calculateAge = (date: string | null | undefined): number => {
+        if (!date) return 0;
+        const today = new Date();
+        const birth = new Date(date);
+        if (isNaN(birth.getTime())) return 0;
+        let age = today.getFullYear() - birth.getFullYear();
+        const m = today.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+            age--;
+        }
+        return age;
+    };
 
-    const myOverall = ovr;
+    const myAge = calculateAge(birthDate);
 
-    const getCardTier = (ovr: number) => {
+    const calculateOvr = (stats: any, pos: string) => {
+        const { pace, shooting, passing, dribbling, defending, physical } = stats;
+
+        if (pos === 'ATA') {
+            return Math.round((pace * 2 + shooting * 2 + passing + dribbling + defending + physical) / 8);
+        }
+        if (pos === 'MEI') {
+            return Math.round((pace + shooting + passing * 2 + dribbling * 2 + defending + physical) / 8);
+        }
+        if (pos === 'ZAG' || pos === 'DEF') {
+            return Math.round((pace + shooting + passing + dribbling + defending * 2 + physical * 2) / 8);
+        }
+
+        // GOL e outros: Média aritmética simples
+        return Math.round((pace + shooting + passing + dribbling + defending + (physical || 0)) / 6);
+    };
+
+    // My overall calculated dynamically for the preview, falling back to context ovr if stats missing
+    const myOverall = myStats ? calculateOvr(myStats, selectedPosition || 'MEI') : ovr;
+
+    const getCardTier = (ovr: number, age: number) => {
+        if (age >= 60) return 'icon';
         if (ovr >= 80) return 'gold';
         if (ovr >= 75) return 'silver';
         return 'bronze';
     };
 
-    const tier = getCardTier(myOverall);
+    const tier = getCardTier(myOverall, myAge);
 
     // Card Theme Configs
     const cardStyles = {
@@ -241,6 +272,14 @@ const PlayerStatsScreen = () => {
             border: "border-[#ebdccb]",
             text: "text-[#3d2411]",
             divider: "bg-[#3d2411]/30",
+        },
+        icon: {
+            bgImage: "https://www.globalfootballplatform.com/wp-content/uploads/2025/12/fc25-icon.png",
+            bg: "bg-[#ffffff]",
+            gradient: "bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#ffffff] via-[#e2e2e2] to-[#c0c0c0]",
+            border: "border-[#e2e2e2]",
+            text: "text-[#1a1a1a]",
+            divider: "bg-[#1a1a1a]/30",
         }
     }[tier];
 
@@ -381,13 +420,19 @@ const PlayerStatsScreen = () => {
         localStorage.setItem('amaplay_card_text_color', customTextColor);
 
         try {
-            // Save Country to DB
-            if (userId && country) {
+            // Save Country & Position to DB
+            if (userId) {
                 const profile = await dataService.players.getById(userId);
                 const currentAddress = profile?.address || {};
 
+                // Update context
+                if (position !== selectedPosition) {
+                    setPosition(selectedPosition);
+                }
+
                 await dataService.players.save({
                     id: userId,
+                    position: selectedPosition, // Save Position
                     address: { ...currentAddress, country },
                     cardAvatar: localAvatar
                 });
@@ -707,8 +752,27 @@ const PlayerStatsScreen = () => {
                     <div className="w-full bg-surface-dark border border-white/10 rounded-2xl p-4 animate-in slide-in-from-bottom-10 fade-in duration-300 mb-8">
                         <h3 className="text-white font-bold mb-4 flex items-center gap-2">
                             <span className="material-symbols-outlined text-primary">tune</span>
-                            Ajustar Imagem
+                            Ajustar Imagem e Posição
                         </h3>
+
+                        {/* Position Selector */}
+                        <div className="mb-6">
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Posição</label>
+                            <div className="flex gap-2">
+                                {['ATA', 'MEI', 'ZAG', 'GOL'].map((pos) => (
+                                    <button
+                                        key={pos}
+                                        onClick={() => setSelectedPosition(pos as any)}
+                                        className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all border ${selectedPosition === pos
+                                            ? 'bg-primary text-background-dark border-primary'
+                                            : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white'
+                                            }`}
+                                    >
+                                        {pos}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
 
                         <div className="space-y-4 mb-6">
                             {/* Re-open Editor Button */}
@@ -1073,7 +1137,7 @@ const PlayerStatsScreen = () => {
                                                     <h4 className="text-white font-bold">{tm.name}</h4>
                                                     <div className="flex items-center gap-2 mt-0.5">
                                                         <span className="text-[10px] bg-white/10 text-slate-300 px-1.5 py-0.5 rounded uppercase font-bold">{tm.pos}</span>
-                                                        <span className="text-xs text-primary font-bold">OVR {calculateOvr(tm.stats)}</span>
+                                                        <span className="text-xs text-primary font-bold">OVR {calculateOvr(tm.stats, tm.pos)}</span>
                                                         <span className="text-[10px] text-slate-500">({tm.voteCount} votos)</span>
                                                     </div>
                                                 </div>
