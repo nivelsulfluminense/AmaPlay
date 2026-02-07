@@ -6,10 +6,14 @@ import { ptBR } from 'date-fns/locale';
 
 const NotificationsScreen = () => {
     const navigate = useNavigate();
-    const { notifications, fetchNotifications, respondToPromotion, isLoading } = useUser();
+    const { notifications, fetchNotifications, respondToPromotion, markAsRead, isLoading } = useUser();
 
     useEffect(() => {
-        fetchNotifications();
+        const init = async () => {
+            await fetchNotifications();
+            await markAsRead();
+        };
+        init();
     }, []);
 
     const handleResponse = async (id: string, accept: boolean) => {

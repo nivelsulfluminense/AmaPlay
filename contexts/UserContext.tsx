@@ -79,6 +79,7 @@ interface UserContextType {
   fetchNotifications: () => Promise<void>;
   promoteMember: (targetUserId: string, newRole: Role) => Promise<void>;
   respondToPromotion: (notificationId: string, accept: boolean) => Promise<void>;
+  markAsRead: () => Promise<void>;
 
   // Status
   isLoading: boolean;
@@ -1012,7 +1013,8 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (error) throw error;
       setNotifications(data || []);
-      setUnreadCount(data?.filter(n => n.status === 'pending' || n.status === 'read').length || 0); // Simplified count
+      // unreadCount should only count 'pending' notifications
+      setUnreadCount(data?.filter(n => n.status === 'pending').length || 0);
     } catch (err) {
       console.error('Error fetching notifications:', err);
     }
@@ -1086,6 +1088,26 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const markAsRead = async () => {
+    if (!userId) return;
+    try {
+      // Mark all 'pending' general notifications as 'read'
+      const { error } = await supabase
+        .from('notifications')
+        .update({ status: 'read' })
+        .eq('user_id', userId)
+        .eq('status', 'pending');
+
+      if (error) throw error;
+
+      // Update local state
+      setNotifications(prev => prev.map(n => n.status === 'pending' ? { ...n, status: 'read' } : n));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error('Error marking notifications as read:', err);
+    }
+  };
+
   const value: UserContextType = React.useMemo(() => ({
     userId,
     role,
@@ -1131,6 +1153,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     fetchNotifications,
     promoteMember,
     respondToPromotion,
+    markAsRead,
     deleteAccount,
     intendedRole,
     setIntendedRole,

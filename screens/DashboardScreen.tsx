@@ -164,7 +164,9 @@ const DashboardScreen = () => {
           >
             <span className="material-symbols-outlined">notifications</span>
             {unreadCount > 0 && (
-              <span className="absolute top-2 right-2.5 size-2 bg-primary rounded-full ring-2 ring-background-dark animate-pulse"></span>
+              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-black text-background-dark ring-2 ring-background-dark">
+                {unreadCount > 9 ? '+9' : unreadCount}
+              </span>
             )}
           </button>
           <button
