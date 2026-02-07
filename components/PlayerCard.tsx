@@ -102,7 +102,7 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
     return (
         <div
             onClick={onClick}
-            className={`relative w-[400px] h-[640px] transition-transform duration-500 hover:scale-[1.01] ${className} ${onClick ? 'cursor-pointer' : ''}`}
+            className={`relative w-[430px] h-[640px] transition-transform duration-500 hover:scale-[1.01] ${className} ${onClick ? 'cursor-pointer' : ''}`}
             style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
         >
             {/* Card Background Shape & Image */}
@@ -142,7 +142,7 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
             <div className="absolute inset-0 z-20 flex flex-col pointer-events-none rounded-[2rem]">
 
                 {/* TOP LEFT: OVR & POS */}
-                <div className="absolute top-[80px] left-[50px] flex flex-col items-center w-[60px] text-center z-30">
+                <div className="absolute top-[80px] left-[55px] flex flex-col items-center w-[70px] text-center z-30">
                     <span
                         className={`text-[70px] font-black tracking-tighter leading-[0.8] ${!customTextColor ? style.text : ''} font-display drop-shadow-md`}
                         style={{ color: customTextColor || undefined }}

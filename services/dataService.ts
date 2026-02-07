@@ -1616,5 +1616,42 @@ export const dataService = {
 
             if (error) throw error;
         }
+    },
+
+    notifications: {
+        sendToTeam: async (teamId: string, title: string, message: string, data: any = {}) => {
+            const { data: members, error: membersError } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('team_id', teamId)
+                .eq('is_approved', true);
+
+            if (membersError || !members) {
+                console.error('Error fetching team members for notification:', membersError);
+                return;
+            }
+
+            const { data: { user } } = await supabase.auth.getUser();
+            const notifications = members
+                .filter(m => m.id !== user?.id) // Don't notify the sender
+                .map(m => ({
+                    user_id: m.id,
+                    type: 'general_alert',
+                    title,
+                    message,
+                    data,
+                    status: 'pending'
+                }));
+
+            if (notifications.length > 0) {
+                const { error: notifyError } = await supabase
+                    .from('notifications')
+                    .insert(notifications);
+
+                if (notifyError) {
+                    console.error('Error sending team notifications:', notifyError);
+                }
+            }
+        }
     }
 };

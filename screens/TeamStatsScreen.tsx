@@ -455,9 +455,9 @@ const TeamStatsScreen = () => {
 
                 {/* CARDS VIEW */}
                 {!loading && activeTab === 'cards' && (
-                    <div className="grid grid-cols-2 gap-x-2 gap-y-4">
+                    <div className="grid grid-cols-2 gap-x-1 sm:gap-x-3 gap-y-6 px-1">
                         {filteredPlayers.map(player => (
-                            <div key={player.id} className="flex justify-center overflow-hidden" style={{ height: 260 }}>
+                            <div key={player.id} className="flex justify-center overflow-hidden" style={{ height: 265 }}>
                                 <PlayerCard
                                     name={player.name}
                                     ovr={player.ovr}
@@ -468,7 +468,7 @@ const TeamStatsScreen = () => {
                                     teamLogo={teamDetails?.logo || undefined}
                                     heartTeamLogo={PRO_TEAMS.find(t => t.id === player.heartTeamId)?.logo}
                                     birthDate={player.birthDate}
-                                    scale={0.42}
+                                    scale={0.4}
                                     className="shadow-lg origin-top"
                                     onClick={() => setSelectedPlayer(player)}
                                 />

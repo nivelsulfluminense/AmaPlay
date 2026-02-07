@@ -5,7 +5,7 @@ import { dataService, LegacyGameEvent as GameEvent } from '../services/dataServi
 
 const AgendaScreen = () => {
     const navigate = useNavigate();
-    const { role, name } = useUser();
+    const { role, name, teamId } = useUser();
 
     // Calendar State
     const [currentDate, setCurrentDate] = useState(new Date()); // Tracks the month being viewed
@@ -304,6 +304,16 @@ const AgendaScreen = () => {
             if (viewingParticipants === String(id)) {
                 const freshParts = await dataService.events.getParticipants(id);
                 setParticipants(freshParts);
+            }
+
+            // 🔔 NOTIFICATION: Notify team when someone confirms
+            if (status === 'confirmed' && teamId) {
+                const event = freshEvents.find(e => e.id === id) || evt;
+                if (event) {
+                    const title = "Novo amigo confirmado! ⚽";
+                    const message = `${name} confirmou presença no evento: ${event.title}. Data: ${new Date(event.date + 'T12:00:00').toLocaleDateString('pt-BR')}, Local: ${event.location}.`;
+                    dataService.notifications.sendToTeam(teamId, title, message, { eventId: id });
+                }
             }
         } catch (e: any) {
             console.error("Failed to update status", e);
@@ -686,7 +696,11 @@ const AgendaScreen = () => {
                             const declined = event.participants.filter(p => p.status === 'declined');
 
                             return (
-                                <div key={event.id} className="bg-surface-dark border border-white/5 rounded-[2rem] overflow-hidden shadow-xl">
+                                <div
+                                    key={event.id}
+                                    onClick={() => setSelectedDetail(event)}
+                                    className="bg-surface-dark border border-white/5 rounded-[2rem] overflow-hidden shadow-xl cursor-pointer hover:border-primary/30 transition-all active:scale-[0.98]"
+                                >
                                     {/* Event Header mini-card */}
                                     <div className="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between">
                                         <div className="flex items-center gap-3">
