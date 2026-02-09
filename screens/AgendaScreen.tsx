@@ -341,7 +341,8 @@ const AgendaScreen = () => {
                 message += `🚀 *SEJA O PRIMEIRO A CONFIRMAR!*\n\n`;
             }
 
-            message += `Confirme sua presença no link do time! ⚽🔥`;
+            const appLink = `${window.location.origin}/#/agenda`;
+            message += `Confirme sua presença no link do time:\n${appLink} ⚽🔥`;
 
             const text = encodeURIComponent(message);
             window.open(`https://wa.me/?text=${text}`, '_blank');
