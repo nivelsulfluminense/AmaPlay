@@ -299,7 +299,7 @@ const DashboardScreen = () => {
               onClick={() => navigate(isPro ? '/pro-selection' : '/scouts')}
               className="flex flex-col items-center gap-3 group"
             >
-              <div className={`${quickActionButtonStyle} text-primary`}>
+              <div className={`${quickActionButtonStyle} text-primary ${!isPro ? 'animate-attention animate-glow-pulse shadow-[0_0_15px_rgba(19,236,91,0.2)]' : ''}`}>
                 <span className={iconStyle}>military_tech</span>
               </div>
               <span className="text-xs font-medium text-slate-300 text-center leading-tight">AmaFut<br />Pro</span>

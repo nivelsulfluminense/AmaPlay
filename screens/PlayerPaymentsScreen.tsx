@@ -5,7 +5,7 @@ import { useUser } from '../contexts/UserContext';
 
 const PlayerPaymentsScreen = () => {
     const navigate = useNavigate();
-    const { teamId } = useUser();
+    const { teamId, userId, role } = useUser();
     const [filter, setFilter] = useState<'pending' | 'history'>('pending');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -36,12 +36,13 @@ const PlayerPaymentsScreen = () => {
             try {
                 const [chargesData, transData, receiverData] = await Promise.all([
                     dataService.finance.charges.list(),
-                    dataService.finance.list(),
+                    dataService.finance.list(userId || undefined),
                     dataService.finance.receiver.get()
                 ]);
                 setCharges(chargesData);
                 setOfficialReceiver(receiverData);
-                // Filter history to current player and only successful/pending ones
+
+                // History is now already filtered by RLS and the query parameter
                 setHistory(transData.filter(t => t.status === 'paid' || t.status === 'pending' || t.status === 'rejected'));
             } catch (err) {
                 console.error("Failed to load payment data", err);
@@ -170,18 +171,41 @@ const PlayerPaymentsScreen = () => {
             </header>
 
             <main className="flex flex-col gap-6 px-4 pt-4">
-                {/* Intro Card */}
-                <div className="bg-gradient-to-br from-surface-dark to-[#101a12] p-6 rounded-[32px] border border-white/5 shadow-2xl relative overflow-hidden">
-                    <div className="absolute -right-8 -bottom-8 opacity-10">
-                        <span className="material-symbols-outlined text-[150px] text-primary">account_balance_wallet</span>
-                    </div>
+                {/* Intro Card - Premium Layered Design */}
+                <div className="group relative p-7 rounded-[32px] overflow-hidden bg-[#0A0F0B] border border-white/5 shadow-2xl transition-all duration-500 hover:border-primary/20">
+                    {/* Dynamic Background Effects */}
+                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-[100px] group-hover:bg-primary/20 transition-all duration-1000"></div>
+                    <div className="absolute -bottom-16 -left-16 w-32 h-32 bg-primary/5 rounded-full blur-[60px]"></div>
+
+                    {/* Technical Texture Overlay */}
+                    <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: `radial-gradient(circle, #ffffff 1px, transparent 1px)`, backgroundSize: '16px 16px' }}></div>
+
                     <div className="relative z-10">
-                        <p className="text-[10px] font-black uppercase text-slate-500 tracking-[3px] mb-2">Central de Cobranças</p>
-                        <h1 className="text-3xl font-black italic uppercase text-white mb-2 leading-none">
-                            Selecione o que <br /> <span className="text-primary">deseja pagar</span>
+                        <div className="flex items-center gap-3 mb-5">
+                            <span className="h-[2px] w-6 bg-primary rounded-full"></span>
+                            <p className="text-[9px] font-black uppercase text-slate-500 tracking-[0.25em]">Central de Cobranças</p>
+                        </div>
+
+                        <h1 className="text-[42px] font-black italic uppercase text-white leading-[0.85] tracking-tighter mb-5">
+                            Selecione o que <br />
+                            <span className="text-primary group-hover:text-white transition-colors duration-500">deseja pagar</span>
                         </h1>
-                        <p className="text-xs text-slate-400 font-bold max-w-[200px]">Escolha uma cobrança ativa e informe o período correspondente.</p>
+
+                        <div className="flex items-center gap-4">
+                            <div className="w-[2px] h-10 bg-white/10 rounded-full shrink-0"></div>
+                            <p className="text-[11px] text-slate-400 font-bold leading-tight max-w-[200px]">
+                                Escolha uma cobrança ativa e informe o período correspondente para validação rápida.
+                            </p>
+                        </div>
                     </div>
+
+                    {/* Floating Hero Element */}
+                    <div className="absolute top-1/2 -right-10 -translate-y-1/2 opacity-[0.07] group-hover:opacity-20 transition-all duration-700 group-hover:scale-110 -rotate-12 pointer-events-none select-none">
+                        <span className="material-symbols-outlined text-[180px] text-white">payments</span>
+                    </div>
+
+                    {/* Subtle Internal Glow */}
+                    <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent"></div>
                 </div>
 
                 {/* Status Tabs */}

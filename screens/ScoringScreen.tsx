@@ -58,6 +58,7 @@ const ScoringScreen = () => {
     const [showChart, setShowChart] = useState(false);
     const [filterPosition, setFilterPosition] = useState<'ALL' | 'ATA' | 'MEI' | 'ZAG' | 'GOL'>('ALL');
     const [searchTerm, setSearchTerm] = useState('');
+    const [isSavingAll, setIsSavingAll] = useState(false);
     const [hasVotedForAll, setHasVotedForAll] = useState(false);
     const [showUnlockTooltip, setShowUnlockTooltip] = useState(false);
     const [filterHeartTeam, setFilterHeartTeam] = useState<string | null>(null);
@@ -96,14 +97,14 @@ const ScoringScreen = () => {
             setLastGame(last);
             setNextGame(next);
 
-            // Check if voting window is open (until 1 day before next game)
+            // Check if voting window is open (until 3 hours before next game)
             let deadline = new Date();
             if (next) {
                 deadline = new Date(next.date + 'T' + next.time);
-                deadline.setDate(deadline.getDate() - 1);
+                // Subtrai 3 horas da hora de início do próximo jogo
+                deadline.setHours(deadline.getHours() - 3);
             } else {
-                // If no next game, maybe keep it open for a week? Or forever?
-                // "aberto até um dia antes da próxima partida"
+                // Se não houver próximo jogo agendado, mantém aberto por um longo período (ex: 1 ano)
                 deadline.setFullYear(deadline.getFullYear() + 1);
             }
             setIsVoteOpen(now < deadline);
@@ -193,6 +194,46 @@ const ScoringScreen = () => {
     // Debounce the save function
     const debouncedSave = useDebounce((playerId: string, rating: number) => saveRating(playerId, rating), 1000);
 
+    const handleBulkSave = async () => {
+        if (!lastGame) return;
+        setIsSavingAll(true);
+        try {
+            // Prepare ratings array
+            const ratingsArray = Object.entries(userRatings).map(([playerId, rating]) => ({
+                playerId,
+                rating
+            }));
+
+            if (ratingsArray.length === 0) {
+                alert("Nenhuma nota para salvar.");
+                return;
+            }
+
+            // @ts-ignore - added via dynamic service
+            await dataService.scoring.submitRatingsBulk(String(lastGame.id), ratingsArray);
+
+            // Reload to update averages
+            await loadData();
+
+            // Feedback for UI
+            const successToast = document.createElement('div');
+            successToast.className = 'fixed bottom-24 left-1/2 -translate-x-1/2 bg-primary text-background-dark px-6 py-3 rounded-full font-bold shadow-2xl animate-in fade-in slide-in-from-bottom-4 z-[999]';
+            successToast.innerText = '✅ Notas salvas com sucesso!';
+            document.body.appendChild(successToast);
+            setTimeout(() => {
+                successToast.classList.add('fade-out');
+                setTimeout(() => successToast.remove(), 500);
+            }, 3000);
+
+        } catch (error: any) {
+            console.error("Error bulk saving ratings", error);
+            const errorMsg = error.message || "Erro ao salvar notas. Tente novamente.";
+            alert(errorMsg);
+        } finally {
+            setIsSavingAll(false);
+        }
+    };
+
     const handleRatingChange = (playerId: string, value: string) => {
         // Allow empty string to clear
         if (value === '') {
@@ -224,6 +265,10 @@ const ScoringScreen = () => {
 
             return nextState;
         });
+
+        // Option: we can keep debounced save OR remove it. 
+        // Given user asked for a button, making it explicit might be better.
+        // I'll keep it for "safety" but the button is the main UI element now.
         debouncedSave(playerId, numVal);
     };
 
@@ -234,7 +279,7 @@ const ScoringScreen = () => {
     };
 
     return (
-        <div className="bg-background-dark min-h-screen pb-10 relative">
+        <div className="bg-background-dark min-h-screen pb-32 relative">
             {/* Header */}
             <div className="sticky top-0 z-40 bg-background-dark/95 backdrop-blur-sm border-b border-white/5 p-4 flex items-center gap-4">
                 <button onClick={() => navigate(-1)} className="size-10 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors">
@@ -414,7 +459,7 @@ const ScoringScreen = () => {
                             <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-6 text-center">
                                 <span className="material-symbols-outlined text-blue-500 text-3xl mb-2">lock</span>
                                 <h3 className="text-white font-bold mb-1">Votação Encerrada</h3>
-                                <p className="text-blue-200 text-sm">A votação para este jogo já foi encerrada pois um novo jogo já está agendado.</p>
+                                <p className="text-blue-200 text-sm">A votação foi encerrada. O prazo limite é de até 3 horas antes do início da próxima partida.</p>
                             </div>
                         ) : (
                             <div className="space-y-4">
@@ -523,9 +568,25 @@ const ScoringScreen = () => {
                                             </div>
                                         ))}
                                 </div>
-                                <p className="text-center text-xs text-slate-500 mt-4 px-8">
-                                    As notas são salvas automaticamente. A média final será calculada com base na nota de todos os participantes.
-                                </p>
+                                <div className="pt-4 pb-8 flex flex-col items-center gap-4">
+                                    <button
+                                        onClick={handleBulkSave}
+                                        disabled={isSavingAll || Object.keys(userRatings).length === 0}
+                                        className={`w-full max-w-xs h-14 rounded-2xl bg-primary text-background-dark font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_10px_30px_rgba(19,236,91,0.2)] active:scale-95 transition-all ${isSavingAll ? 'opacity-50' : ''}`}
+                                    >
+                                        {isSavingAll ? (
+                                            <div className="size-5 border-3 border-background-dark/30 border-t-background-dark rounded-full animate-spin"></div>
+                                        ) : (
+                                            <>
+                                                <span className="material-symbols-outlined">save</span>
+                                                Salvar Notas
+                                            </>
+                                        )}
+                                    </button>
+                                    <p className="text-center text-xs text-slate-500 px-8">
+                                        As notas também são salvas conforme você digita. Clique em salvar para confirmar todas as avaliações.
+                                    </p>
+                                </div>
                             </div>
                         )}
                     </>

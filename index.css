@@ -7,7 +7,8 @@ body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
-  background-color: #102216; /* background-dark */
+  background-color: #102216;
+  /* background-dark */
 }
 
 /* Custom Scrollbar for non-webkit */
@@ -31,4 +32,37 @@ body {
 
 .group:hover .group-hover\:filled {
   font-variation-settings: 'FILL' 1 !important;
+}
+
+/* Attention Animation for Pro Button */
+@keyframes attentional-bounce {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes attentional-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(19, 236, 91, 0);
+  }
+
+  50% {
+    box-shadow: 0 0 20px rgba(19, 236, 91, 0.4);
+  }
+}
+
+.animate-attention {
+  animation: attentional-bounce 2s infinite ease-in-out;
+}
+
+.animate-glow-pulse {
+  animation: attentional-glow 2s infinite ease-in-out;
 }

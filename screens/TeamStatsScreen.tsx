@@ -61,7 +61,7 @@ const TeamStatsScreen = () => {
     const navigate = useNavigate();
     const { teamId, teamDetails, role, approveMember, rejectMember, updateMemberRole, isFirstManager } = useUser();
     const isManager = role === 'presidente' || role === 'vice-presidente' || isFirstManager;
-    const [activeTab, setActiveTab] = useState<'scouts' | 'cards' | 'management' | 'charts'>('scouts');
+    const [activeTab, setActiveTab] = useState<'scouts' | 'cards' | 'management' | 'charts' | 'scoring'>('scouts');
     const [searchTerm, setSearchTerm] = useState('');
     const [filterPos, setFilterPos] = useState<string>('all');
     const [filterPro, setFilterPro] = useState(false);
@@ -76,20 +76,23 @@ const TeamStatsScreen = () => {
     const [allPlayers, setAllPlayers] = useState<Player[]>([]);
     const [pendingPlayers, setPendingPlayers] = useState<Profile[]>([]);
     const [analyticsData, setAnalyticsData] = useState<any[]>([]);
+    const [ratingsData, setRatingsData] = useState<any[]>([]);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
 
     const loadData = useCallback(async () => {
         if (!teamId) return; // Wait for teamId to be available
         setLoading(true);
         try {
-            const [playersData, pendingData, analytics] = await Promise.all([
+            const [playersData, pendingData, analytics, ratings] = await Promise.all([
                 dataService.players.list(true, teamId as string),
                 isManager ? dataService.team.getPendingRequests() : Promise.resolve([]),
-                dataService.scouts.getAnalytics().catch(() => []) // Handle error if service not ready
+                dataService.scouts.getAnalytics().catch(() => []), // Handle error if service not ready
+                dataService.scoring.getRatingsAnalytics(teamId as string).catch(() => [])
             ]);
             setAllPlayers(playersData);
             setPendingPlayers(pendingData as Profile[]);
             setAnalyticsData(analytics as any[]);
+            setRatingsData(ratings as any[]);
         } catch (err) {
             console.error("Falha ao carregar dados do time", err);
         } finally {
@@ -182,6 +185,105 @@ const TeamStatsScreen = () => {
 
         return list;
     }, [searchTerm, filterPos, sortBy, activeTab, teamId, allPlayers]);
+
+    // Accumulated Scouts Calculation
+    const accumulatedScouts = useMemo(() => {
+        const totals: Record<string, number> = {};
+        if (!analyticsData) return totals;
+
+        analyticsData.forEach((scout: any) => {
+            // Try to find player ID from profiles (if expanded) or fallback to direct field if available
+            // Note: In dataService, we select profiles:player_id(id,...), so it should be in scout.profiles.id
+            const pid = String(scout.profiles?.id || scout.player_id);
+            if (!pid || pid === 'undefined') return;
+
+            const points = calculatePoints(scout.stats);
+            totals[pid] = (totals[pid] || 0) + points;
+        });
+        return totals;
+    }, [analyticsData]);
+
+    // Average Ratings Calculation
+    // Scoring Statistics Calculation
+    const scoringStats = useMemo(() => {
+        const stats: Record<string, {
+            lastGame: { total: number, count: number },
+            annual: { total: number, count: number }
+        }> = {};
+
+        // Find dates
+        const distinctDates = Array.from(new Set(
+            ratingsData
+                .map(r => r.game_events?.event_date)
+                .filter(Boolean)
+        )).sort((a: any, b: any) => new Date(b).getTime() - new Date(a).getTime());
+
+        const lastGameDate = distinctDates[0];
+        const currentYear = new Date().getFullYear();
+
+        ratingsData.forEach(r => {
+            const pid = String(r.player_id);
+            const rDate = r.game_events?.event_date;
+            const rating = Number(r.rating);
+
+            if (!stats[pid]) {
+                stats[pid] = {
+                    lastGame: { total: 0, count: 0 },
+                    annual: { total: 0, count: 0 }
+                };
+            }
+
+            if (rDate) {
+                const d = new Date(rDate);
+                if (d.getFullYear() === currentYear) {
+                    stats[pid].annual.total += rating;
+                    stats[pid].annual.count += 1;
+                }
+
+                if (rDate === lastGameDate) {
+                    stats[pid].lastGame.total += rating;
+                    stats[pid].lastGame.count += 1;
+                }
+            }
+        });
+
+        const averages: Record<string, { lastGame: number, annual: number }> = {};
+        Object.keys(stats).forEach(pid => {
+            const s = stats[pid];
+            averages[pid] = {
+                lastGame: s.lastGame.count > 0 ? s.lastGame.total / s.lastGame.count : 0,
+                annual: s.annual.count > 0 ? s.annual.total / s.annual.count : 0
+            };
+        });
+        return { averages, lastGameDate };
+    }, [ratingsData]);
+
+    // Players sorted by average rating for Scoring Tab
+    // Players sorted by average rating for Scoring Tab
+    const scoringPlayers = useMemo(() => {
+        let list = [...allPlayers].filter(p => scoringStats.averages[String(p.id)] !== undefined);
+
+        if (searchTerm) {
+            const lower = searchTerm.toLowerCase();
+            list = list.filter(p => p.name.toLowerCase().includes(lower));
+        }
+
+        if (filterPos !== 'all') {
+            list = list.filter(p => p.position === filterPos);
+        }
+
+        list.sort((a, b) => {
+            const statsA = scoringStats.averages[String(a.id)];
+            const statsB = scoringStats.averages[String(b.id)];
+            const avgA = statsA ? statsA.annual : 0;
+            const avgB = statsB ? statsB.annual : 0;
+
+            if (sortBy === 'name') return a.name.localeCompare(b.name);
+            return avgB - avgA;
+        });
+
+        return list;
+    }, [allPlayers, scoringStats, searchTerm, filterPos, sortBy]);
 
     // Analytics Processing
     const chartsData = useMemo(() => {
@@ -294,13 +396,13 @@ const TeamStatsScreen = () => {
                         Scouts
                         {activeTab === 'scouts' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></div>}
                     </button>
+                    <button onClick={() => { setActiveTab('scoring'); setSortBy('scout'); }} className={`flex-1 min-w-[80px] pb-3 text-xs font-bold uppercase tracking-wider transition-colors relative ${activeTab === 'scoring' ? 'text-primary' : 'text-slate-500 hover:text-slate-300'}`}>
+                        Scoring
+                        {activeTab === 'scoring' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></div>}
+                    </button>
                     <button onClick={() => { setActiveTab('cards'); setSortBy('ovr'); }} className={`flex-1 min-w-[80px] pb-3 text-xs font-bold uppercase tracking-wider transition-colors relative ${activeTab === 'cards' ? 'text-primary' : 'text-slate-500 hover:text-slate-300'}`}>
                         Cards
                         {activeTab === 'cards' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></div>}
-                    </button>
-                    <button onClick={() => setActiveTab('charts')} className={`flex-1 min-w-[80px] pb-3 text-xs font-bold uppercase tracking-wider transition-colors relative ${activeTab === 'charts' ? 'text-primary' : 'text-slate-500 hover:text-slate-300'}`}>
-                        Gráficos
-                        {activeTab === 'charts' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></div>}
                     </button>
                     {isManager && (
                         <button onClick={() => setActiveTab('management')} className={`flex-1 min-w-[80px] pb-3 text-xs font-bold uppercase tracking-wider transition-colors relative ${activeTab === 'management' ? 'text-primary' : 'text-slate-500 hover:text-slate-300'}`}>
@@ -404,7 +506,10 @@ const TeamStatsScreen = () => {
                         </button>
                         <div className="flex justify-between items-center px-2 mb-1">
                             <span className="text-xs font-bold text-slate-500 uppercase">Ranking de Pontuação</span>
-                            <span className="text-xs font-bold text-slate-500 uppercase">Máx. Scout</span>
+                            <div className="flex gap-4">
+                                <span className="text-xs font-bold text-slate-500 uppercase text-right w-16">Acumulado</span>
+                                <span className="text-xs font-bold text-slate-500 uppercase text-right w-16">Máx. Scout</span>
+                            </div>
                         </div>
                         {filteredPlayers.map((player, index) => (
                             <div key={player.id} className="bg-surface-dark border border-white/5 rounded-xl p-3 flex items-center gap-3 relative overflow-hidden group hover:border-primary/20 transition-all">
@@ -437,19 +542,101 @@ const TeamStatsScreen = () => {
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col items-end pr-2 shrink-0">
-                                    <div className="flex items-center gap-1">
-                                        <span className={`text-xl font-black ${player.maxScout > 0 ? 'text-primary' : 'text-slate-600'}`}>
-                                            {(player.maxScout || 0).toFixed(1)}
+                                <div className="flex items-center gap-4 shrink-0">
+                                    <div className="flex flex-col items-end w-16">
+                                        <span className={`text-xl font-black text-white`}>
+                                            {(accumulatedScouts[String(player.id)] || 0).toFixed(1)}
                                         </span>
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Total</span>
                                     </div>
-                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Pontos</span>
+
+                                    <div className="flex flex-col items-end w-16">
+                                        <div className="flex items-center gap-1">
+                                            <span className={`text-xl font-black ${player.maxScout > 0 ? 'text-primary' : 'text-slate-600'}`}>
+                                                {(player.maxScout || 0).toFixed(1)}
+                                            </span>
+                                        </div>
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Máx.</span>
+                                    </div>
                                 </div>
 
                                 {/* Hover Glow */}
                                 <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {/* SCORING VIEW */}
+                {!loading && activeTab === 'scoring' && (
+                    <div className="flex flex-col gap-3">
+                        <div className="flex justify-between items-center px-2 mb-1">
+                            <span className="text-xs font-bold text-slate-500 uppercase">Ranking de Scoring</span>
+                            <div className="flex gap-4">
+                                <span className="text-xs font-bold text-slate-500 uppercase text-right w-16">Último Jogo</span>
+                                <span className="text-xs font-bold text-slate-500 uppercase text-right w-16">Média Anual</span>
+                            </div>
+                        </div>
+                        {scoringPlayers.map((player, index) => {
+                            const stats = scoringStats.averages[String(player.id)];
+                            return (
+                                <div key={player.id} className="bg-surface-dark border border-white/5 rounded-xl p-3 flex items-center gap-3 relative overflow-hidden group hover:border-primary/20 transition-all">
+                                    {/* Rank Medal/Shadow */}
+                                    <div className="relative size-8 flex items-center justify-center shrink-0">
+                                        <span className={`text-lg font-black italic ${index === 0 ? 'text-yellow-500 scale-125' : index === 1 ? 'text-slate-300' : index === 2 ? 'text-orange-400' : 'text-slate-600 opacity-50'}`}>
+                                            {index + 1}
+                                        </span>
+                                    </div>
+
+                                    <div className="size-12 rounded-full overflow-hidden border border-white/10 relative shrink-0">
+                                        <img src={player.avatar} alt={player.name} className="w-full h-full object-cover" />
+                                        {player.isPro && (
+                                            <div className="absolute inset-0 border-2 border-primary rounded-full pointer-events-none"></div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5 mb-0.5">
+                                            <h3 className="text-white font-bold truncate">{player.name}</h3>
+                                            {player.isPro && (
+                                                <span className="material-symbols-outlined text-primary text-[14px]" title="Atleta Pro">military_tech</span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-[9px] text-slate-400 font-bold uppercase px-1.5 py-0.5 rounded bg-white/5 border border-white/5">{player.position}</span>
+                                            <span className="text-[9px] text-slate-500 font-bold uppercase px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
+                                                {ratingsData.filter(r => String(r.player_id) === String(player.id)).length} votos
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-4 shrink-0">
+                                        {/* Last Game */}
+                                        <div className="flex flex-col items-end w-16">
+                                            <span className={`text-xl font-black ${stats?.lastGame ? 'text-white' : 'text-slate-600'}`}>
+                                                {(stats?.lastGame || 0).toFixed(1)}
+                                            </span>
+                                        </div>
+
+                                        {/* Annual */}
+                                        <div className="flex flex-col items-end w-16">
+                                            <span className={`text-xl font-black text-blue-400`}>
+                                                {(stats?.annual || 0).toFixed(1)}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Hover Glow */}
+                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-400/0 via-blue-400/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+                                </div>
+                            );
+                        })}
+                        {scoringPlayers.length === 0 && (
+                            <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+                                <span className="material-symbols-outlined text-4xl mb-2">star_half</span>
+                                <p>Nenhuma avaliação recebida ainda.</p>
+                            </div>
+                        )}
                     </div>
                 )}
 

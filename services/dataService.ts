@@ -208,7 +208,7 @@ export const dataService = {
         }
     },
     finance: {
-        list: async (): Promise<LegacyTransaction[]> => {
+        list: async (userId?: string): Promise<LegacyTransaction[]> => {
             const teamId = await getCurrentTeamId();
 
             let query = supabase
@@ -218,6 +218,10 @@ export const dataService = {
 
             if (teamId) {
                 query = query.eq('team_id', teamId);
+            }
+
+            if (userId) {
+                query = query.eq('target_user_id', userId);
             }
 
             const { data, error } = await query;
@@ -645,6 +649,26 @@ export const dataService = {
     },
 
     scoring: {
+        async getRatingsAnalytics(teamId: string) {
+            const { data, error } = await supabase
+                .from('match_ratings')
+                .select(`
+                    rating,
+                    player_id,
+                    game_events:event_id!inner (
+                        team_id,
+                        event_date
+                    )
+                `)
+                .eq('game_events.team_id', teamId);
+
+            if (error) {
+                console.error('Error fetching ratings analytics:', error);
+                return [];
+            }
+
+            return data || [];
+        },
         getMatchRatings: async (eventId: string): Promise<MatchRating[]> => {
             const { data, error } = await supabase
                 .from('match_ratings')
@@ -679,13 +703,40 @@ export const dataService = {
             if (error) throw error;
         },
 
+        submitRatingsBulk: async (eventId: string, ratings: { playerId: string, rating: number }[]) => {
+            if (!eventId) throw new Error('Event ID is required');
+            if (!ratings || ratings.length === 0) return;
+
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('User not authenticated');
+
+            const rows = ratings.map(r => ({
+                event_id: eventId,
+                voter_id: user.id,
+                player_id: r.playerId,
+                rating: r.rating
+            }));
+
+            const { error } = await supabase
+                .from('match_ratings')
+                .upsert(rows, { onConflict: 'event_id,voter_id,player_id' });
+
+            if (error) {
+                console.error('Error in submitRatingsBulk:', error);
+                if (error.code === 'PGRST204' || error.message?.includes('not found')) {
+                    throw new Error('Erro de infraestrutura: A tabela de avaliações não foi encontrada. Por favor, execute o script SQL de migração.');
+                }
+                throw error;
+            }
+        },
+
         getMyStats: async (): Promise<ScoringStats> => {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return { lastGameScore: 0, annualAverage: 0, matchesCount: 0 };
 
             const { data: ratings } = await supabase
                 .from('match_ratings')
-                .select('rating, event_id, events(event_date)')
+                .select('rating, event_id, game_events(event_date)')
                 .eq('player_id', user.id);
 
             if (!ratings || ratings.length === 0) return { lastGameScore: 0, annualAverage: 0, matchesCount: 0 };
@@ -705,8 +756,8 @@ export const dataService = {
             const annualAverage = gameScores.length > 0 ? totalSum / gameScores.length : 0;
 
             const sortedRatings = [...ratings].sort((a: any, b: any) => {
-                const dateA = a.events?.event_date || '';
-                const dateB = b.events?.event_date || '';
+                const dateA = a.game_events?.event_date || '';
+                const dateB = b.game_events?.event_date || '';
                 return dateB.localeCompare(dateA);
             });
 
@@ -912,7 +963,7 @@ export const dataService = {
             const teamId = await getCurrentTeamId();
 
             let query = supabase
-                .from('events')
+                .from('game_events')
                 .select('*')
                 .order('event_date', { ascending: true });
 
@@ -993,7 +1044,7 @@ export const dataService = {
             const teamId = await getCurrentTeamId();
 
             const { data, error } = await supabase
-                .from('events')
+                .from('game_events')
                 .insert({
                     type: event.type,
                     title: event.title,
@@ -1084,7 +1135,7 @@ export const dataService = {
             }));
 
             const { data, error } = await supabase
-                .from('events')
+                .from('game_events')
                 .insert(inserts)
                 .select('id');
 
@@ -1108,14 +1159,14 @@ export const dataService = {
 
             let realId = id;
             if (typeof id === 'number') {
-                const { data: events } = await supabase.from('events').select('id').limit(100);
+                const { data: events } = await supabase.from('game_events').select('id').limit(100);
                 const found = events?.find(e => parseInt(e.id.replace(/-/g, '').slice(0, 10), 16) === id);
                 if (!found) throw new Error('Evento nÃ£o encontrado');
                 realId = found.id;
             }
 
             // Upsert only the participant status. 
-            // The 'confirmed_count' in the 'events' table is now updated automatically 
+            // The 'confirmed_count' in the 'game_events' table is now updated automatically 
             // by a database trigger (tr_refresh_confirmed_count).
             const { error: upsertError } = await supabase
                 .from('event_participants')
@@ -1136,14 +1187,14 @@ export const dataService = {
         update: async (id: number | string, updates: Partial<LegacyGameEvent>): Promise<void> => {
             let realId = id;
             if (typeof id === 'number') {
-                const { data: events } = await supabase.from('events').select('id').limit(100);
+                const { data: events } = await supabase.from('game_events').select('id').limit(100);
                 const found = events?.find(e => parseInt(e.id.replace(/-/g, '').slice(0, 10), 16) === id);
                 if (!found) throw new Error('Evento nÃ£o encontrado');
                 realId = found.id;
             }
 
             const { error } = await supabase
-                .from('events')
+                .from('game_events')
                 .update({
                     type: updates.type,
                     title: updates.title,
@@ -1161,14 +1212,14 @@ export const dataService = {
         delete: async (id: number | string): Promise<void> => {
             let realId = id;
             if (typeof id === 'number') {
-                const { data: events } = await supabase.from('events').select('id').limit(100);
+                const { data: events } = await supabase.from('game_events').select('id').limit(100);
                 const found = events?.find(e => parseInt(e.id.replace(/-/g, '').slice(0, 10), 16) === id);
                 if (!found) return;
                 realId = found.id;
             }
 
             const { error } = await supabase
-                .from('events')
+                .from('game_events')
                 .delete()
                 .eq('id', realId);
 

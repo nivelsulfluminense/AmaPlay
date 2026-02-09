@@ -14,7 +14,7 @@ interface TeamDetails {
 export interface Notification {
   id: string;
   user_id: string;
-  type: 'promotion_invite' | 'general_alert';
+  type: 'promotion_invite' | 'general_alert' | 'team_join';
   title: string;
   message: string;
   data: any;
@@ -1092,17 +1092,24 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     if (!userId) return;
     try {
       // Mark all 'pending' general notifications as 'read'
+      // BUT keep 'promotion_invite' as pending so they can still be answered
       const { error } = await supabase
         .from('notifications')
         .update({ status: 'read' })
         .eq('user_id', userId)
-        .eq('status', 'pending');
+        .eq('status', 'pending')
+        .neq('type', 'promotion_invite');
 
       if (error) throw error;
 
       // Update local state
-      setNotifications(prev => prev.map(n => n.status === 'pending' ? { ...n, status: 'read' } : n));
-      setUnreadCount(0);
+      setNotifications(prev => prev.map(n => (n.status === 'pending' && n.type !== 'promotion_invite') ? { ...n, status: 'read' } : n));
+
+      // Recalculate unreadCount based on remaining pending notifications
+      setUnreadCount(prev => {
+        const remainingPending = notifications.filter(n => n.status === 'pending' && n.type === 'promotion_invite').length;
+        return remainingPending;
+      });
     } catch (err) {
       console.error('Error marking notifications as read:', err);
     }

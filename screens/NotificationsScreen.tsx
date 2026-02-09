@@ -117,7 +117,7 @@ const NotificationsScreen = () => {
                                 </div>
                             )}
 
-                            {notification.status !== 'pending' && (
+                            {(notification.status === 'accepted' || notification.status === 'rejected') && (
                                 <div className="mt-2 pt-2 border-t border-white/5 flex items-center gap-2 text-xs">
                                     <span className="material-symbols-outlined text-sm">
                                         {notification.status === 'accepted' ? 'check_circle' : 'cancel'}
