@@ -137,3 +137,9 @@ Nas configurações (ícone de engrenagem), tem uma opção lá no final para "S
 ---
 
 **Esperamos que o AmaPlay deixe seu futebol ainda mais divertido e organizado! Bom jogo! ⚽**
+
+
+
+Chamada de especialistas 
+
+Use para construção do código @backend-specialist.md , @debugger.md , @devops-engineer.md @explorer-agent.md , @performance-optimizer.md 

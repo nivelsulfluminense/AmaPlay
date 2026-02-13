@@ -74,7 +74,7 @@ const LoginScreen = () => {
   if (!isInitialized || userId) return null;
 
   return (
-    <div className="relative flex min-h-screen w-full flex-col justify-center overflow-hidden bg-background-dark">
+    <div className="relative flex h-full w-full flex-col justify-center overflow-hidden bg-background-dark">
       {/* Background Texture */}
       <div className="absolute inset-0 z-0 opacity-20 pointer-events-none mix-blend-overlay">
         <div

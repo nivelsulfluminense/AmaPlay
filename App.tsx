@@ -44,7 +44,7 @@ const ProtectedRoute = ({ children, restrictedTo }: { children: React.ReactEleme
   if (!userId) return <Navigate to="/" replace />;
 
   if (restrictedTo && !restrictedTo.includes(role)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return children;
@@ -141,10 +141,27 @@ const BottomNav = () => {
 
 const Layout = ({ children }: { children?: React.ReactNode }) => {
   useAuthRedirect();
+  const location = useLocation();
+
+  // Routes where BottomNav is hidden (auth & onboarding)
+  const isAuthRoute = [
+    '/',
+    '/register-account',
+    '/forgot-password',
+    '/reset-password',
+    '/register-role',
+    '/register-team',
+    '/register-privacy',
+    '/register-profile'
+  ].includes(location.pathname);
+
+  // Strictly disable scrolling only on the login screen to keep it fixed in the middle
+  const isFixedRoute = location.pathname === '/';
+
   return (
     <div className="min-h-screen w-full bg-background-dark flex justify-center">
       <div className="w-full max-w-md relative bg-background-dark h-screen shadow-2xl overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-y-auto no-scrollbar pb-24">
+        <div className={`flex-1 ${isFixedRoute ? 'overflow-hidden' : 'overflow-y-auto'} no-scrollbar ${isAuthRoute ? '' : 'pb-24'}`}>
           <AuthGuard>
             <>{children}</>
           </AuthGuard>
@@ -217,9 +234,9 @@ const App = () => {
             } />
 
             <Route path="/dashboard" element={
-              <ProtectedRoute restrictedTo={['presidente', 'vice-presidente', 'admin', 'player']}>
+              <PrivateRoute>
                 <DashboardScreen />
-              </ProtectedRoute>
+              </PrivateRoute>
             } />
 
             <Route path="/agenda" element={

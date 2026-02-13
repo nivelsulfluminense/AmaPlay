@@ -72,51 +72,56 @@ export const useAuthRedirect = () => {
 
         // 🚀 DECISÃO DE ROTEAMENTO
 
-        // CASO 1: USUÁRIO COMPLETO (Oficial ou Legado)
-        // Se tiver tudo preenchido OU a flag oficial true, vai pro Dashboard.
-        if (isOfficiallyComplete || (validRole && hasTeam && hasProfileData)) {
-            // Define o destino final
-            const dashboardTarget = (isApproved || isFirstManager) ? '/dashboard' : '/pre-dash';
+        // 🚀 DECISÃO DE ROTEAMENTO SIMPLIFICADA (Conforme solicitação)
 
-            // Se tentar ir para a raiz, manda pro dashboard
-            if (currentPath === '/') {
-                navigateTo(dashboardTarget);
+        // Se o usuário já finalizou o setup (ou banco diz que sim)
+        if (isSetupComplete || (validRole && hasTeam && hasProfileData)) {
+
+            // 1. Aprovado ou Primeiro Gestor -> Dashboard
+            if (isApproved || isFirstManager) {
+                // Se estiver na raiz, login ou onboarding, vai pro Dashboard
+                if (currentPath === '/' ||
+                    ['/register-account', '/forgot-password', '/reset-password', '/register-role', '/register-team', '/register-privacy', '/register-profile', '/pre-dash'].includes(currentPath)) {
+                    navigateTo('/dashboard');
+                }
                 return;
             }
 
-            // Bloqueia volta para onboarding
-            const onboardingRoutes = ['/register-role', '/register-team', '/register-privacy', '/register-profile'];
-            if (onboardingRoutes.includes(currentPath)) {
-                navigateTo(dashboardTarget);
+            // 2. Não aprovado -> Pre-Dash
+            else {
+                // Se estiver tentando acessar áreas restritas ou raiz
+                if (currentPath === '/' ||
+                    currentPath.startsWith('/dashboard') ||
+                    currentPath.startsWith('/agenda') ||
+                    currentPath.startsWith('/finance') ||
+                    currentPath.startsWith('/inventory') ||
+                    ['/register-role', '/register-team', '/register-privacy', '/register-profile'].includes(currentPath)) {
+
+                    if (currentPath !== '/pre-dash') {
+                        navigateTo('/pre-dash');
+                    }
+                }
+                return;
             }
-            return;
         }
 
         // CASO 2: USUÁRIO INCOMPLETO (Fluxo Sequencial)
-
-        // Etapa 1: Função
         if (!validRole) {
             idealPath = '/register-role';
         }
-        // Etapa 2: Time
         else if (!hasTeam) {
             idealPath = '/register-team';
         }
-        // Etapa 3: Dados Finais (Privacidade -> Perfil)
         else {
-            if (currentPath === '/register-profile') {
-                idealPath = '/register-profile';
-            } else {
+            // Se já tem time mas não setupComplete, assume que falta finalizar cadastro
+            if (currentPath !== '/register-profile' && currentPath !== '/register-privacy') {
                 idealPath = '/register-privacy';
+            } else {
+                return; // Deixa o usuário navegar entre privacy e profile
             }
         }
 
-        // Exceção: Permitir visualização de stats para autenticados
-        if (currentPath === '/player-stats') return;
-
-        // Executar redirecionamento se necessário
         if (idealPath && currentPath !== idealPath) {
-            if (currentPath === '/register-privacy' && idealPath === '/register-profile') return;
             navigateTo(idealPath);
         }
 
